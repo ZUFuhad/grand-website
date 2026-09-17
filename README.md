@@ -1,0 +1,27 @@
+# GRAND Company Profile — Full Rebuild
+
+This package is a fresh website/dashboard rebuild, not a patch of the previous page.
+
+## Website
+Open `index.html`.
+
+## Dashboard
+Open `/admin/`.
+Login: `Grandcms` / `Grandcms2004`
+
+## Supplied asset placement
+- GRAND logo: `assets/brand/grand-logo.png` (supplied logo, used in the website header and footer)
+- CEO photo: `assets/team/ceo.jpg`
+- Client logos: `assets/clients/`
+- Project images: `assets/projects/<project-id>/`
+
+The supplied logo is included in the build. CEO, client and project image folders remain ready for additional original source assets when supplied.
+
+## Brand direction
+The website uses GRAND's profile direction: “We value what you have to say!”, established in 2004, with Event, Communication, Marketing and Supply as the four service pillars. The visual system uses a warm gold accent and a premium, experienced, execution-focused presentation.
+
+## Social links
+Facebook, LinkedIn, Instagram and WhatsApp are clickable. Replace the three generic social URLs in `index.html` with the actual GRAND profile URLs when supplied.
+
+## Important CMS note
+The dashboard now supports project-wise title, client, discipline, year, detail and multi-image uploads. Published projects are stored in this browser and render on the main website. Client logos can also be added, renamed and removed from the dashboard and sync to the client wall. It also creates a social publish queue with official Facebook, Instagram and LinkedIn share entry points. Automatic posting to those networks requires their API credentials, OAuth permissions and a hosted backend; the browser-only build does not pretend to provide that server-side access.

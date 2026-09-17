@@ -1,0 +1,219 @@
+const data = {
+  services: [
+    ['Event', 'Corporate events, PR events, award ceremonies, decor, catering and event management.'],
+    ['Communication', 'PR, printing, branding, media coordination and brand messaging.'],
+    ['Marketing', 'Local marketing, promotion, activations and on-ground brand engagement.'],
+    ['Supply', 'Exhibition fabrication, lighting and sound, photography, security and production support.']
+  ],
+  packages: [
+    ['Event Essential', 'Planning, production and on-ground coordination for a focused event.'],
+    ['Brand Activation', 'Creative communication, promotion and field execution for visible campaigns.'],
+    ['Grand Complete', 'End-to-end event, marketing, communication and supply support.']
+  ],
+  projects: [
+    ['New Year 2025', 'Radisson Blu', 'Event', '2025'],
+    ['Australia Expo 2025', 'Mentors', 'Marketing', '2025'],
+    ['City Bank × Next Block', 'CTG Rehab', 'Communication', '2025'],
+    ['Stall Fabrication', '1st ICT Fair 2025', 'Supply', '2025'],
+    ['PFEC Futsal Tournament 2025', 'PFEC', 'Event', '2025'],
+    ['Furniture Fair 2025', 'GEC', 'Event', '2025'],
+    ['Grand Opening', 'WonderLand', 'Event', '2025'],
+    ['Business Conference', 'Nahar Agro', 'Event', '2025'],
+    ['CTG IT Fair 2025', 'Chattogram', 'Event', '2025'],
+    ['PFEC Futsal — Team & Turf', 'PFEC', 'Marketing', '2025'],
+    ['M&M Eid Expo 2025', 'M&M', 'Marketing', '2025'],
+    ['Farzana Malik — Outlet & Set', 'Farzana Malik', 'Marketing', '2025']
+  ],
+  clients: ['Daraz', 'Mentors', 'City Bank', 'Next Block', 'PFEC', 'WonderLand', 'Nahar Agro', 'M&M', 'Farzana Malik', 'Radisson Blu', '1st ICT Fair', 'CTG Rehab'],
+  team: [
+    ['ZUF', 'Zahir Uddin Fuhad', 'CEO & Founder'],
+    ['MUM', 'Mahin Uddin Mazumder', 'Chief Operating Officer'],
+    ['TEAM', 'GRAND Team', 'Creative & Communication'],
+    ['TEAM', 'GRAND Team', 'Production & Supply']
+  ]
+};
+
+const storedServices = JSON.parse(localStorage.getItem('grandServices') || 'null');
+if (storedServices) data.services = storedServices;
+const storedPackages = JSON.parse(localStorage.getItem('grandPackages') || 'null');
+if (storedPackages) data.packages = storedPackages;
+const storedClients = JSON.parse(localStorage.getItem('grandClients') || 'null');
+if (storedClients) data.clients = storedClients.map(client => client.name);
+const storedProjects = JSON.parse(localStorage.getItem('grandProjects') || 'null');
+if (storedProjects) data.projects = storedProjects.map(project => [project.title, project.client, project.category, project.year, project.details, project.images || []]);
+// HERO FULL-SCREEN SLIDER
+(function () {
+  const heroSliderKey = 'grandHeroSlides';
+  let heroSlides = JSON.parse(localStorage.getItem(heroSliderKey) || 'null');
+  if (!heroSlides || !heroSlides.length) {
+    heroSlides = data.projects.flatMap(p => (p[5] || []).map(img => ({ image: img, caption: p[0] }))).slice(0, 10);
+  }
+  const sliderTrack = document.querySelector('#sliderTrack');
+  const sliderDots  = document.querySelector('#sliderDots');
+  if (!sliderTrack) return;
+  sliderTrack.innerHTML = heroSlides.length
+    ? heroSlides.map((slide, i) => `<div class="slider-slide${i === 0 ? ' active' : ''}" style="background-image:url('${slide.image}')"></div>`).join('')
+    : '<div class="slider-slide fallback active"></div>';
+  const slideEls    = sliderTrack.querySelectorAll('.slider-slide');
+  const totalSlides = slideEls.length;
+  if (totalSlides > 1 && sliderDots) {
+    sliderDots.innerHTML = Array.from({length: totalSlides}, (_, i) =>
+      `<button class="slider-dot${i === 0 ? ' active' : ''}" aria-label="Go to slide ${i + 1}"></button>`
+    ).join('');
+  }
+  let current = 0;
+  let autoTimer;
+  function goTo(index) {
+    const dots = sliderDots ? sliderDots.querySelectorAll('.slider-dot') : [];
+    slideEls[current].classList.remove('active');
+    if (dots[current]) dots[current].classList.remove('active');
+    current = ((index % totalSlides) + totalSlides) % totalSlides;
+    slideEls[current].classList.add('active');
+    if (dots[current]) dots[current].classList.add('active');
+  }
+  function startAuto() {
+    clearInterval(autoTimer);
+    if (totalSlides > 1) autoTimer = setInterval(() => goTo(current + 1), 6000);
+  }
+  startAuto();
+  const prevBtn = document.querySelector('.slider-prev');
+  const nextBtn = document.querySelector('.slider-next');
+  if (prevBtn) prevBtn.addEventListener('click', () => { goTo(current - 1); startAuto(); });
+  if (nextBtn) nextBtn.addEventListener('click', () => { goTo(current + 1); startAuto(); });
+  if (sliderDots) {
+    sliderDots.addEventListener('click', e => {
+      const dot = e.target.closest('.slider-dot');
+      if (!dot) return;
+      const idx = [...sliderDots.querySelectorAll('.slider-dot')].indexOf(dot);
+      if (idx >= 0) { goTo(idx); startAuto(); }
+    });
+  }
+  const heroEl = document.querySelector('#heroSlider');
+  if (heroEl) {
+    heroEl.addEventListener('mouseenter', () => clearInterval(autoTimer));
+    heroEl.addEventListener('mouseleave', startAuto);
+  }
+  document.addEventListener('keydown', e => {
+    if (document.querySelector('#projectModal.open')) return;
+    if (e.key === 'ArrowLeft')  { goTo(current - 1); startAuto(); }
+    if (e.key === 'ArrowRight') { goTo(current + 1); startAuto(); }
+  });
+})();
+const leadership = JSON.parse(localStorage.getItem('grandLeadership') || 'null');
+if (leadership) {
+  const ceo = leadership.ceo || {};
+  const name = ceo.name || 'Zahir Uddin Fuhad';
+  const role = ceo.role || 'CEO & Founder';
+  const message = ceo.message || 'We value what you have to say—and we build the work that makes it matter.';
+  document.querySelector('#ceoNameDisplay').textContent = name;
+  document.querySelector('#ceoRoleDisplay').textContent = role;
+  document.querySelector('#ceoMessageDisplay').textContent = `“${message.replace(/^“|”$/g, '')}”`;
+  document.querySelector('#ceoSignature').textContent = name;
+  document.querySelector('#ceoSignatureRole').textContent = `${role}, GRAND`;
+  if (ceo.image) {
+    const portrait = document.querySelector('#ceoPortrait');
+    portrait.classList.add('has-photo');
+    portrait.style.background = `url("${ceo.image}") center/cover no-repeat`;
+  }
+  data.team = (leadership.team || []).map(member => [member.name, member.name, member.role]);
+}
+const workGrid = document.querySelector('#workGrid');
+const filters = document.querySelector('#filters');
+const categories = ['All', ...new Set(data.projects.map(project => project[2]))];
+
+filters.innerHTML = categories.map((category, index) => `<button class="filter ${index === 0 ? 'active' : ''}" data-cat="${category}">${category}</button>`).join('');
+
+const renderOfferCards = (selector, items) => {
+  document.querySelector(selector).innerHTML = items.map((item, index) => `<article><b>${String(index + 1).padStart(2, '0')}</b><h3>${item[0]}</h3><p>${item[1]}</p></article>`).join('');
+};
+renderOfferCards('#serviceGrid', data.services);
+renderOfferCards('#packageGrid', data.packages);
+
+function renderWorks(category = 'All') {
+  workGrid.innerHTML = data.projects
+    .filter(project => category === 'All' || project[2] === category)
+    .map((project, index) => `<article class="work" data-project-index="${data.projects.indexOf(project)}"><div class="work-media" ${project[5] && project[5][0] ? `style="background-image:url('${project[5][0]}')"` : ''}>${!project[5] || !project[5][0] ? String(index + 1).padStart(2, '0') : ''}</div><div class="work-body"><small>${project[3]} · ${project[2]}</small><h3>${project[0]}</h3><p>${project[4] || project[1]}</p>${project[4] ? `<button class="share-project" data-title="${project[0]}" data-details="${project[4]}">Share</button>` : ''}</div></article>`)
+    .join('');
+}
+
+renderWorks();
+filters.addEventListener('click', event => {
+  if (!event.target.matches('.filter')) return;
+  document.querySelectorAll('.filter').forEach(button => button.classList.remove('active'));
+  event.target.classList.add('active');
+  renderWorks(event.target.dataset.cat);
+});
+
+workGrid.addEventListener('click', event => {
+  const work = event.target.closest('.work');
+  if (!work) return;
+  if (!event.target.matches('.share-project')) {
+    const project = data.projects[Number(work.dataset.projectIndex)];
+    const images = project[5] || [];
+    document.querySelector('#projectModalTitle').textContent = project[0];
+    document.querySelector('#projectModalDetails').textContent = project[4] || project[1];
+    document.querySelector('#projectGallery').innerHTML = images.length ? images.map(image => `<img src="${image}" alt="${project[0]} project photo">`).join('') : '<p>No project photos uploaded yet.</p>';
+    document.querySelector('#projectModal').classList.add('open');
+    document.querySelector('#projectModal').setAttribute('aria-hidden', 'false');
+    return;
+  }
+  const text = `${event.target.dataset.title} — ${event.target.dataset.details}`;
+  const url = window.location.href.split('#')[0];
+  const links = [
+    `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(text)}`,
+    `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
+    `https://www.instagram.com/`
+  ];
+  links.forEach(link => window.open(link, '_blank', 'noopener,noreferrer'));
+});
+
+const projectModal = document.querySelector('#projectModal');
+projectModal.addEventListener('click', event => {
+  if (!event.target.matches('[data-close-project]')) return;
+  projectModal.classList.remove('open');
+  projectModal.setAttribute('aria-hidden', 'true');
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') {
+    projectModal.classList.remove('open');
+    projectModal.setAttribute('aria-hidden', 'true');
+  }
+});
+
+const logoWall = document.querySelector('#logoWall');
+const logoClients = storedClients ? storedClients.filter(client => client.image) : [];
+const logoItems = [...logoClients, ...logoClients];
+logoWall.innerHTML = `<div class="logo-row left">${logoItems.map(client => `<div class="logo"><img src="${client.image}" alt="${client.name} logo"></div>`).join('')}</div>`;
+document.querySelector('#clientHeadline').textContent = `${data.clients.length}+`;
+document.querySelector('#brandCount').textContent = `${data.clients.length}+`;
+document.querySelector('#projectCount').textContent = data.projects.length;
+document.querySelector('#years').textContent = new Date().getFullYear() - 2004;
+document.querySelector('#teamGrid').innerHTML = data.team.filter(member => member[1] !== 'Zahir Uddin Fuhad').map(member => `<article class="team-card"><div class="team-photo">${member[0]}</div><h3>${member[1]}</h3><p>${member[2]}</p></article>`).join('');
+document.querySelector('#year').textContent = new Date().getFullYear();
+
+document.querySelectorAll('[data-tilt]').forEach(element => {
+  element.addEventListener('pointermove', event => {
+    const bounds = element.getBoundingClientRect();
+    const rotateX = ((event.clientY - bounds.top) / bounds.height - 0.5) * -8;
+    const rotateY = ((event.clientX - bounds.left) / bounds.width - 0.5) * 10;
+    element.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+  });
+  element.addEventListener('pointerleave', () => {
+    element.style.transform = '';
+  });
+});
+
+document.querySelector('.menu').addEventListener('click', () => {
+  document.querySelector('.site-header nav').classList.toggle('open');
+});
+
+document.addEventListener('contextmenu', event => {
+  if (event.target.closest('img, .work-media, .project-gallery')) event.preventDefault();
+});
+document.addEventListener('dragstart', event => {
+  if (event.target.closest('img, .work-media, .project-gallery')) event.preventDefault();
+});
+document.addEventListener('keydown', event => {
+  const blocked = (event.ctrlKey || event.metaKey) && ['s', 'u', 'p'].includes(event.key.toLowerCase());
+  if (blocked) event.preventDefault();
+});
