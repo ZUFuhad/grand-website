@@ -10,22 +10,23 @@
       <span>CONTROL CENTER</span><h1>Manage GRAND.</h1>
       <div class="cards"><div><b id="yearsTotal">22</b><small>Years</small></div><div><b id="brandTotal">0</b><small>Brands</small></div><div><b id="serviceTotal">0</b><small>Services</small></div><div><b id="projectTotal">0</b><small>Projects</small></div></div>
       
-      <div class="analytics-dashboard">
+      <div class="analytics-dashboard" aria-labelledby="analyticsTitle">
         <div class="analytics-header">
-          <h2>Visitor Traffic</h2>
+          <div><h2 id="analyticsTitle">Visitor Count</h2><p class="analytics-note" id="analyticsStatus" role="status">Loading dashboard chart…</p></div>
           <div class="analytics-toggles" id="trafficToggles">
-            <button class="active" data-view="daily">Daily</button>
-            <button data-view="monthly">Monthly</button>
-            <button data-view="yearly">Yearly</button>
+            <button class="active" type="button" data-view="daily" aria-pressed="true">Daily</button>
+            <button type="button" data-view="monthly" aria-pressed="false">Monthly</button>
+            <button type="button" data-view="yearly" aria-pressed="false">Yearly</button>
           </div>
         </div>
         <div class="charts-grid">
-          <div class="chart-container">
-            <canvas id="trafficChart"></canvas>
+          <div class="chart-container chart-container-wide">
+            <div class="chart-title-row"><h3>Visits</h3><strong id="visitorTotal" aria-label="Total visitors">0</strong></div>
+            <div class="chart-canvas"><canvas id="trafficChart" aria-label="Visitor count bar chart" role="img"></canvas></div>
           </div>
           <div class="chart-container side-chart">
             <h3>Country of Origin</h3>
-            <canvas id="countryChart"></canvas>
+            <div class="chart-canvas"><canvas id="countryChart" aria-label="Visitor country distribution chart" role="img"></canvas></div>
           </div>
         </div>
       </div>
@@ -37,6 +38,6 @@
     <section id="contact"><h2>Contact & Social</h2><label>Phone<input value="01819 312820"></label><label>Email<input value="grandecms@outlook.com"></label><label>Facebook URL<input value="https://www.facebook.com/GECMM2004"></label><label>LinkedIn URL<input value="https://www.linkedin.com/company/grand-ecms/posts/?viewAsMember=true"></label><label>Instagram URL<input value="https://www.instagram.com/grandevent_cms?stkn=MTJ1YW40a3N2djZ1aA=="></label><label>WhatsApp URL<input value="https://wa.me/8801819312820"></label><button class="save">Save contact</button></section>
   </main>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="admin.js?v=20260916-original-logo-colors"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="admin.js?v=20260917-visitor-bars"></script>
 </body></html>

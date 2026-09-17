@@ -163,10 +163,40 @@ function renderProjectList() {
 }
 
 let trafficChart, countryChart;
-const generateMockTraffic = (days) => Array.from({length: days}, (_, i) => Math.floor(Math.random() * 50) + 20 + Math.floor(i * (days > 30 ? 2 : 0.5)));
+const trafficData = {
+  daily: {
+    labels: ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'],
+    values: [12, 25, 39, 31, 48, 42, 21]
+  },
+  monthly: {
+    labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+    values: [142, 176, 158, 213]
+  },
+  yearly: {
+    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    values: [420, 495, 510, 545, 601, 578, 630, 684, 648, 720, 764, 812]
+  }
+};
+
+function setAnalyticsStatus(message, isError = false) {
+  const status = document.querySelector('#analyticsStatus');
+  if (!status) return;
+  status.textContent = message;
+  status.style.color = isError ? '#e8a193' : '';
+}
+
+function updateVisitorTotal(view) {
+  const total = document.querySelector('#visitorTotal');
+  if (!total || !trafficData[view]) return;
+  total.textContent = trafficData[view].values.reduce((sum, value) => sum + value, 0).toLocaleString();
+}
 
 function initCharts() {
-  if (typeof Chart === 'undefined') return;
+  if (trafficChart || countryChart) return;
+  if (typeof Chart === 'undefined') {
+    setAnalyticsStatus('Charts could not load. Check the internet connection and reload the dashboard.', true);
+    return;
+  }
   Chart.defaults.color = '#a79e91';
   Chart.defaults.font.family = 'Inter, sans-serif';
 
@@ -174,51 +204,60 @@ function initCharts() {
   const ctxCountry = document.getElementById('countryChart');
   if (!ctxTraffic || !ctxCountry) return;
 
-  trafficChart = new Chart(ctxTraffic, {
-    type: 'line',
-    data: {
-      labels: Array.from({length: 30}, (_, i) => `Day ${i + 1}`),
-      datasets: [{
-        label: 'Visitors',
-        data: generateMockTraffic(30),
-        borderColor: '#c39a4a',
-        backgroundColor: 'rgba(195, 154, 74, 0.1)',
-        borderWidth: 2,
-        tension: 0.3,
-        fill: true,
-        pointRadius: 2,
-        pointHoverRadius: 5
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
-        x: { grid: { display: false } }
+  try {
+    trafficChart = new Chart(ctxTraffic, {
+      type: 'bar',
+      data: {
+        labels: trafficData.daily.labels,
+        datasets: [{
+          label: 'Visitors',
+          data: trafficData.daily.values,
+          backgroundColor: '#c39a4a',
+          borderColor: '#e6c475',
+          borderWidth: 1,
+          borderRadius: 5,
+          borderSkipped: false,
+          maxBarThickness: 42
+        }]
       },
-      plugins: { legend: { display: false } }
-    }
-  });
-
-  countryChart = new Chart(ctxCountry, {
-    type: 'doughnut',
-    data: {
-      labels: ['Bangladesh', 'USA', 'UK', 'Australia', 'Other'],
-      datasets: [{
-        data: [65, 12, 10, 8, 5],
-        backgroundColor: ['#c39a4a', '#a87e2e', '#8d5f20', '#6e4714', '#4b300c'],
-        borderWidth: 0
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'bottom', labels: { padding: 20, boxWidth: 12 } }
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.08)' }, ticks: { precision: 0 } },
+          x: { grid: { display: false } }
+        },
+        plugins: { legend: { display: false } }
       }
-    }
-  });
+    });
+    updateVisitorTotal('daily');
+
+    countryChart = new Chart(ctxCountry, {
+      type: 'doughnut',
+      data: {
+        labels: ['Bangladesh', 'USA', 'UK', 'Australia', 'Other'],
+        datasets: [{
+          data: [65, 12, 10, 8, 5],
+          backgroundColor: ['#c39a4a', '#a87e2e', '#8d5f20', '#6e4714', '#4b300c'],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { padding: 16, boxWidth: 12 } }
+        }
+      }
+    });
+    setAnalyticsStatus('Demo analytics — connect a visitor analytics service for live traffic.');
+  } catch (error) {
+    console.error('Could not initialise dashboard charts:', error);
+    trafficChart = null;
+    countryChart = null;
+    setAnalyticsStatus('Charts could not be displayed. Reload the dashboard and try again.', true);
+    return;
+  }
 
   const toggles = document.querySelectorAll('#trafficToggles button');
   toggles.forEach(btn => {
@@ -226,18 +265,12 @@ function initCharts() {
       toggles.forEach(t => t.classList.remove('active'));
       e.target.classList.add('active');
       const view = e.target.dataset.view;
-      
-      if (view === 'daily') {
-        trafficChart.data.labels = Array.from({length: 24}, (_, i) => `${i}:00`);
-        trafficChart.data.datasets[0].data = generateMockTraffic(24).map(v => Math.floor(v / 3));
-      } else if (view === 'monthly') {
-        trafficChart.data.labels = Array.from({length: 30}, (_, i) => `Day ${i + 1}`);
-        trafficChart.data.datasets[0].data = generateMockTraffic(30);
-      } else if (view === 'yearly') {
-        trafficChart.data.labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        trafficChart.data.datasets[0].data = generateMockTraffic(12).map(v => v * 30);
-      }
+      toggles.forEach(t => t.setAttribute('aria-pressed', String(t === e.target)));
+      if (!trafficData[view]) return;
+      trafficChart.data.labels = trafficData[view].labels;
+      trafficChart.data.datasets[0].data = trafficData[view].values;
       trafficChart.update();
+      updateVisitorTotal(view);
     });
   });
 }
