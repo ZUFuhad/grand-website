@@ -1,3 +1,5 @@
+import { supabase } from '../supabase/config.js';
+
 const login = document.querySelector('#login');
 const app = document.querySelector('#app');
 const projectKey = 'grandProjects';
@@ -72,6 +74,87 @@ const defaultLeadership = {
 let leadership = JSON.parse(localStorage.getItem(leadershipKey) || 'null') || defaultLeadership;
 leadership.team = (leadership.team || []).map(member => ({...member, image: member.image || ''}));
 const saveLeadership = () => localStorage.setItem(leadershipKey, JSON.stringify(leadership));
+
+const remoteId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+async function uploadDataUrl(dataUrl, folder, id, extension = 'jpg') {
+  if (!dataUrl || !dataUrl.startsWith('data:')) return dataUrl;
+  const [header, encoded] = dataUrl.split(',');
+  const mime = (header.match(/data:([^;]+)/) || [])[1] || 'image/jpeg';
+  const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+  const path = `${folder}/${id}.${extension}`;
+  const upload = await supabase.storage.from('assets').upload(path, bytes, {contentType: mime, upsert: true});
+  if (upload.error) throw new Error(`Storage upload failed (${path}): ${upload.error.message}`);
+  const publicUrl = supabase.storage.from('assets').getPublicUrl(path);
+  return publicUrl.data.publicUrl;
+}
+async function persistRemoteProject(project) {
+  const id = project.id || remoteId();
+  const images = await Promise.all((project.images || []).map((image, index) => uploadDataUrl(image, 'projects', `${id}/${index}`, image.startsWith('data:image/png') ? 'png' : 'jpg')));
+  const result = await supabase.from('projects').upsert({id, title: project.title, client: project.client, category: project.category, project_date: project.date || (project.year ? `${project.year}-01-01` : null), details: project.details, images}, {onConflict: 'id'});
+  if (result.error) throw new Error(`Project record failed: ${result.error.message}`);
+  project.id = id;
+}
+async function persistRemoteClient(client) {
+  const id = client.id || remoteId();
+  const image = await uploadDataUrl(client.image, 'clients', id, client.image.startsWith('data:image/png') ? 'png' : 'jpg');
+  const result = await supabase.from('clients').upsert({id, name: client.name, image_url: image}, {onConflict: 'id'});
+  if (result.error) throw new Error(`Client record failed: ${result.error.message}`);
+  client.id = id; client.image = image;
+}
+async function persistRemoteLeadership() {
+  const ceoId = leadership.ceo.id || 'ceo';
+  const ceoImage = await uploadDataUrl(leadership.ceo.image, 'team', ceoId, 'jpg');
+  const rows = [{id: ceoId, name: leadership.ceo.name, role: leadership.ceo.role, message: leadership.ceo.message, image_url: ceoImage}];
+  for (const member of leadership.team) {
+    const id = member.id || remoteId();
+    const image = await uploadDataUrl(member.image, 'team', id, member.image.startsWith('data:image/png') ? 'png' : 'jpg');
+    member.id = id;
+    rows.push({id, name: member.name, role: member.role, image_url: image});
+  }
+  const result = await supabase.from('leadership').upsert(rows, {onConflict: 'id'});
+  if (result.error) throw new Error(`Leadership records failed: ${result.error.message}`);
+  leadership.ceo.id = ceoId; leadership.ceo.image = ceoImage;
+}
+async function deleteRemoteRecord(table, id, label) {
+  if (!id) return;
+  const result = await supabase.from(table).delete().eq('id', id);
+  if (result.error) throw new Error(`${label} delete failed: ${result.error.message}`);
+}
+function reportRemoteError(error, label) {
+  console.warn(`${label} was saved locally but could not sync to Supabase:`, error);
+  alert(`${label} saved locally. Supabase sync failed: ${error.message || 'unknown error'}`);
+}
+async function loadRemoteAdminContent() {
+  try {
+    const [clientResult, projectResult, leadershipResult] = await Promise.all([
+      supabase.from('clients').select('*'),
+      supabase.from('projects').select('*'),
+      supabase.from('leadership').select('*')
+    ]);
+    if (clientResult.error) console.warn('Supabase clients unavailable:', clientResult.error.message);
+    if (projectResult.error) console.warn('Supabase projects unavailable:', projectResult.error.message);
+    if (leadershipResult.error) console.warn('Supabase leadership unavailable:', leadershipResult.error.message);
+    if (clientResult.data?.length) clients = clientResult.data.map(row => ({id: row.id, name: row.name || row.title || 'Client', image: row.image_url || row.image || row.logo_url || ''}));
+    if (projectResult.data?.length) projects = projectResult.data.map(row => {
+      const images = row.images || row.image_urls || (row.image_url ? [row.image_url] : []);
+      const projectDate = row.project_date || row.date || '';
+      return {id: row.id, title: row.title || row.name || 'Untitled project', client: row.client || row.client_name || '', category: row.category || 'Event', date: projectDate, year: row.year || projectDate.slice(0, 4), details: row.details || row.description || '', images: Array.isArray(images) ? images : []};
+    });
+    if (leadershipResult.data?.length) {
+      const remote = {ceo: null, team: []};
+      leadershipResult.data.forEach(row => {
+        const member = {id: row.id, name: row.name || '', role: row.role || '', image: row.image_url || row.image || ''};
+        if (row.type === 'ceo' || row.kind === 'ceo' || row.is_ceo || row.id === 'ceo') remote.ceo = {...member, message: row.message || ''};
+        else if (member.name) remote.team.push(member);
+      });
+      if (remote.ceo || remote.team.length) leadership = {ceo: remote.ceo || defaultLeadership.ceo, team: remote.team};
+    }
+    saveClients(); saveProjects(projects); saveLeadership();
+    renderClients(); renderProjectList(); renderLeadership(); renderOverview();
+  } catch (error) {
+    console.warn('Supabase admin content unavailable; continuing with local content:', error);
+  }
+}
 
 function optimizeImage(file, options = {}) {
   return new Promise((resolve, reject) => {
@@ -326,13 +409,34 @@ function renderOffers() {
   document.querySelector('#packageList').innerHTML = packages.map((item, index) => `<div class="project-row"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.description)}</span><button type="button" data-package-delete="${index}">Remove</button></div>`).join('');
 }
 
-document.querySelector('#loginBtn').onclick = () => {
-  if (document.querySelector('#user').value === 'Grandcms' && document.querySelector('#pass').value === 'Grandcms2004') {
-    localStorage.grandAdmin = '1'; login.classList.add('hidden'); app.classList.remove('hidden'); renderProjectList(); renderLeadership(); renderOffers(); renderOverview();
+function showDashboard() {
+  localStorage.grandAdmin = '1';
+  login.classList.add('hidden');
+  app.classList.remove('hidden');
+  renderProjectList(); renderPostQueue(); renderClients(); renderLeadership(); renderOffers(); renderOverview();
+}
+document.querySelector('#loginBtn').onclick = async () => {
+  const emailOrUsername = document.querySelector('#user').value.trim();
+  const password = document.querySelector('#pass').value;
+  if (emailOrUsername.includes('@')) {
+    const result = await supabase.auth.signInWithPassword({email: emailOrUsername, password});
+    if (!result.error) {
+      showDashboard();
+      return;
+    }
+    alert(`Supabase login failed: ${result.error.message}`);
+    return;
+  }
+  if (emailOrUsername === 'Grandcms' && password === 'Grandcms2004') {
+    showDashboard();
   } else alert('Invalid login');
 };
-if (localStorage.grandAdmin) { login.classList.add('hidden'); app.classList.remove('hidden'); renderProjectList(); renderPostQueue(); renderClients(); renderLeadership(); renderOffers(); renderOverview(); }
-document.querySelector('#logout').onclick = () => {
+supabase.auth.getSession().then(({data}) => {
+  if (data.session) showDashboard();
+  else localStorage.removeItem('grandAdmin');
+}).catch(error => console.warn('Could not restore Supabase session:', error));
+document.querySelector('#logout').onclick = async () => {
+  await supabase.auth.signOut();
   localStorage.removeItem('grandAdmin');
   window.location.href = '../index.html';
 };
@@ -402,7 +506,11 @@ document.querySelector('#projectForm').addEventListener('submit', event => {
       alert('Project could not be saved in this browser. Please upload fewer or smaller photos.');
       return;
     }
-    renderProjectList(); renderPostQueue(); renderOverview(); event.target.reset(); preview.innerHTML = ''; editingProjectIndex = -1; document.querySelector('#projectForm button[type="submit"]').textContent = 'Publish project to website'; alert(failedFiles.length ? `Project saved. Skipped ${failedFiles.length} unreadable image(s).` : 'Project saved to the website and social publish queue.');
+    renderProjectList(); renderPostQueue(); renderOverview(); event.target.reset(); preview.innerHTML = ''; editingProjectIndex = -1; document.querySelector('#projectForm button[type="submit"]').textContent = 'Publish project to website';
+    persistRemoteProject(project).then(() => {
+      saveProjects(projects);
+    }).catch(error => reportRemoteError(error, 'Project'));
+    alert(failedFiles.length ? `Project saved. Skipped ${failedFiles.length} unreadable image(s).` : 'Project saved to the website and social publish queue.');
   }).catch(error => {
     console.error('Could not publish project:', error);
     alert('Project could not be published. Please try again with fewer or smaller photos.');
@@ -428,7 +536,9 @@ document.querySelector('#projectList').addEventListener('click', event => {
     document.querySelector('#projectForm button[type="submit"]').textContent = 'Update project';
     document.querySelector('#projects').scrollIntoView({behavior: 'smooth'});
   } else if (deleteIdx !== undefined) {
-    projects.splice(Number(deleteIdx), 1); saveProjects(projects); renderProjectList(); renderOverview();
+    const removed = projects.splice(Number(deleteIdx), 1)[0];
+    saveProjects(projects); renderProjectList(); renderOverview();
+    deleteRemoteRecord('projects', removed && removed.id, 'Project').catch(error => reportRemoteError(error, 'Project'));
   } else if (manageIdx !== undefined) {
     const imgDiv = document.querySelector(`#projectImages-${manageIdx}`);
     if (imgDiv) imgDiv.classList.toggle('hidden');
@@ -476,6 +586,10 @@ document.querySelector('#clientForm').addEventListener('submit', event => {
     try {
       if (!saveClients()) throw new Error('Client logo storage quota exceeded');
       renderClients(); renderOverview(); event.target.reset(); document.querySelector('#clientPreview').innerHTML = '';
+      persistRemoteClient(clients[0]).then(() => {
+        saveClients();
+        renderClients();
+      }).catch(error => reportRemoteError(error, 'Client logo'));
     } catch (error) {
       clients.shift();
       alert('Logo could not be saved. Please use a smaller image.');
@@ -499,9 +613,13 @@ document.querySelector('#clientList').addEventListener('click', event => {
   if (saveIndex !== undefined) {
     clients[Number(saveIndex)].name = event.target.parentElement.querySelector('[data-client-name]').value.trim();
     saveClients(); renderClients(); renderOverview();
+    const client = clients[Number(saveIndex)];
+    if (client) persistRemoteClient(client).then(() => { saveClients(); renderClients(); }).catch(error => reportRemoteError(error, 'Client logo'));
   }
   if (deleteIndex !== undefined) {
-    clients.splice(Number(deleteIndex), 1); saveClients(); renderClients(); renderOverview();
+    const removed = clients.splice(Number(deleteIndex), 1)[0];
+    saveClients(); renderClients(); renderOverview();
+    deleteRemoteRecord('clients', removed && removed.id, 'Client').catch(error => reportRemoteError(error, 'Client logo'));
   }
 });
 document.querySelector('#leadershipForm').addEventListener('submit', event => {
@@ -509,7 +627,9 @@ document.querySelector('#leadershipForm').addEventListener('submit', event => {
   const file = document.querySelector('#ceoImage').files[0];
   const update = image => {
     leadership.ceo = {name: document.querySelector('#ceoName').value.trim(), role: document.querySelector('#ceoRole').value.trim(), message: document.querySelector('#ceoMessage').value.trim(), image: image || leadership.ceo.image};
-    saveLeadership(); renderLeadership(); alert('CEO profile saved.');
+    saveLeadership(); renderLeadership();
+    persistRemoteLeadership().then(() => { saveLeadership(); renderLeadership(); }).catch(error => reportRemoteError(error, 'CEO profile'));
+    alert('CEO profile saved.');
   };
   if (file) optimizeImage(file).then(update).catch(() => alert('Could not optimize CEO image.'));
   else update('');
@@ -522,6 +642,7 @@ document.querySelector('#teamForm').addEventListener('submit', event => {
     member.image = image || '';
     leadership.team.push(member);
     saveLeadership(); renderLeadership(); event.target.reset(); document.querySelector('#teamPreview').innerHTML = '';
+    persistRemoteLeadership().then(() => { saveLeadership(); renderLeadership(); }).catch(error => reportRemoteError(error, 'Team member'));
   };
   if (file) optimizeImage(file, {projectImage: true}).then(addMember).catch(() => {
     const reader = new FileReader();
@@ -545,7 +666,9 @@ document.querySelector('#teamImage').addEventListener('change', event => {
 document.querySelector('#teamList').addEventListener('click', event => {
   const index = event.target.dataset.teamDelete;
   if (index === undefined) return;
-  leadership.team.splice(Number(index), 1); saveLeadership(); renderLeadership();
+  const removed = leadership.team.splice(Number(index), 1)[0];
+  saveLeadership(); renderLeadership();
+  deleteRemoteRecord('leadership', removed && removed.id, 'Team member').catch(error => reportRemoteError(error, 'Team member'));
 });
 document.querySelector('#serviceForm').addEventListener('submit', event => {
   event.preventDefault();
@@ -577,3 +700,5 @@ document.querySelectorAll('.save').forEach(button => {
   if (button.closest('#projectForm')) return;
   button.onclick = () => alert('Saved in this browser. Connect the data API/Git CMS for multi-device publishing.');
 });
+
+loadRemoteAdminContent();

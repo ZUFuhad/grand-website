@@ -1,3 +1,5 @@
+import { supabase } from './supabase/config.js';
+
 const data = {
   services: [
     ['Event', 'Corporate events, PR events, award ceremonies, decor, catering and event management.'],
@@ -41,6 +43,70 @@ const storedClients = JSON.parse(localStorage.getItem('grandClients') || 'null')
 if (storedClients) data.clients = storedClients.map(client => client.name);
 const storedProjects = JSON.parse(localStorage.getItem('grandProjects') || 'null');
 if (storedProjects) data.projects = storedProjects.map(project => [project.title, project.client, project.category, project.year, project.details, project.images || []]);
+
+function mapSupabaseProject(row) {
+  const images = row.images || row.image_urls || row.photos || (row.image_url ? [row.image_url] : []);
+  const projectDate = row.project_date || row.date || '';
+  return [row.title || row.name || 'Untitled project', row.client || row.client_name || '', row.category || 'Event', row.year || projectDate.slice(0, 4), row.details || row.description || '', Array.isArray(images) ? images : []];
+}
+function mapSupabaseClient(row) {
+  return {name: row.name || row.title || 'Client', image: row.image_url || row.image || row.logo_url || ''};
+}
+function applySupabaseLeadership(rows) {
+  const next = {ceo: null, team: []};
+  rows.forEach(row => {
+    const type = row.type || row.kind || row.role_type || (row.id === 'ceo' ? 'ceo' : 'team');
+    const member = {name: row.name || '', role: row.role || '', image: row.image_url || row.image || ''};
+    if (type === 'ceo' || row.is_ceo) next.ceo = {...member, message: row.message || ''};
+    else if (member.name) next.team.push(member);
+  });
+  return next.ceo || next.team.length ? {ceo: next.ceo || {}, team: next.team} : null;
+}
+async function loadSupabaseContent() {
+  try {
+    const [clientsResult, projectsResult, leadershipResult] = await Promise.all([
+      supabase.from('clients').select('*'),
+      supabase.from('projects').select('*'),
+      supabase.from('leadership').select('*')
+    ]);
+    if (clientsResult.error) console.warn('Supabase clients unavailable:', clientsResult.error.message);
+    if (projectsResult.error) console.warn('Supabase projects unavailable:', projectsResult.error.message);
+    if (leadershipResult.error) console.warn('Supabase leadership unavailable:', leadershipResult.error.message);
+    if (clientsResult.data?.length) {
+      const clients = clientsResult.data.map(mapSupabaseClient);
+      data.clients = clients.map(client => client.name);
+      const wall = document.querySelector('#logoWall');
+      if (wall) wall.innerHTML = `<div class="logo-row left">${clients.filter(client => client.image).concat(clients.filter(client => client.image)).map(client => `<div class="logo"><img src="${client.image}" alt="${client.name} logo"></div>`).join('')}</div>`;
+    }
+    if (projectsResult.data?.length) data.projects = projectsResult.data.map(mapSupabaseProject);
+    if (leadershipResult.data?.length) {
+      const remoteLeadership = applySupabaseLeadership(leadershipResult.data);
+      if (remoteLeadership) {
+        const ceo = remoteLeadership.ceo || {};
+        document.querySelector('#ceoNameDisplay').textContent = ceo.name || 'Zahir Uddin Fuhad';
+        document.querySelector('#ceoRoleDisplay').textContent = ceo.role || 'CEO & Founder';
+        document.querySelector('#ceoMessageDisplay').textContent = `“${(ceo.message || '').replace(/^“|”$/g, '')}”`;
+        document.querySelector('#ceoSignature').textContent = ceo.name || 'Zahir Uddin Fuhad';
+        document.querySelector('#ceoSignatureRole').textContent = `${ceo.role || 'CEO & Founder'}, GRAND`;
+        if (ceo.image) document.querySelector('#ceoPortrait').style.background = `url("${ceo.image}") center/cover no-repeat`;
+        data.team = remoteLeadership.team.map(member => [member.image || '', member.name, member.role]);
+        document.querySelector('#teamGrid').innerHTML = data.team.map(member => `<article class="team-card"><div class="team-photo"${member[0] ? ` style="background-image:url('${member[0]}');background-size:cover;background-position:center"` : ''}>${member[0] ? '' : 'TEAM'}</div><h3>${member[1]}</h3><p>${member[2]}</p></article>`).join('');
+      }
+    }
+    renderPublicContent();
+  } catch (error) {
+    console.warn('Supabase public content unavailable; using local content:', error);
+  }
+}
+function renderPublicContent() {
+  const categories = ['All', ...new Set(data.projects.map(project => project[2]))];
+  filters.innerHTML = categories.map((category, index) => `<button class="filter ${index === 0 ? 'active' : ''}" data-cat="${category}">${category}</button>`).join('');
+  renderWorks();
+  document.querySelector('#clientHeadline').textContent = `${data.clients.length}+`;
+  document.querySelector('#brandCount').textContent = `${data.clients.length}+`;
+  document.querySelector('#projectCount').textContent = data.projects.length;
+  document.querySelector('#sliderTrack').dispatchEvent(new CustomEvent('contentupdated'));
+}
 // HERO FULL-SCREEN SLIDER
 (function () {
   const heroSliderKey = 'grandHeroSlides';
@@ -264,3 +330,5 @@ document.addEventListener('keydown', event => {
   const blocked = (event.ctrlKey || event.metaKey) && ['s', 'u', 'p'].includes(event.key.toLowerCase());
   if (blocked) event.preventDefault();
 });
+
+loadSupabaseContent();
