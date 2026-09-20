@@ -1,6 +1,7 @@
 const login = document.querySelector('#login');
 const app = document.querySelector('#app');
 const projectKey = 'grandProjects';
+const maxProjects = 50;
 const defaultProjects = [
   ['New Year 2025', 'Radisson Blu', 'Event', '2025'], ['Australia Expo 2025', 'Mentors', 'Marketing', '2025'],
   ['City Bank × Next Block', 'CTG Rehab', 'Communication', '2025'], ['Stall Fabrication', '1st ICT Fair 2025', 'Supply', '2025'],
@@ -26,14 +27,24 @@ const saveProjects = projects => {
 };
 const escapeHtml = value => String(value).replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[character]));
 let projects = readProjects();
+let editingProjectIndex = -1;
 const heroSliderKey = 'grandHeroSlides';
 const getHeroSlides = () => JSON.parse(localStorage.getItem(heroSliderKey) || '[]');
 const saveHeroSlides = slides => localStorage.setItem(heroSliderKey, JSON.stringify(slides));
 const postQueueKey = 'grandPostQueue';
 const clientKey = 'grandClients';
+const maxClientLogos = 1000;
 const defaultClients = ['Daraz', 'Mentors', 'City Bank', 'Next Block', 'PFEC', 'WonderLand', 'Nahar Agro', 'M&M', 'Farzana Malik', 'Radisson Blu', '1st ICT Fair', 'CTG Rehab'];
 let clients = JSON.parse(localStorage.getItem(clientKey) || 'null') || defaultClients.map(name => ({name, image: ''}));
-const saveClients = () => localStorage.setItem(clientKey, JSON.stringify(clients));
+const saveClients = () => {
+  try {
+    localStorage.setItem(clientKey, JSON.stringify(clients));
+    return true;
+  } catch (error) {
+    console.error('Could not save client logos:', error);
+    return false;
+  }
+};
 const servicesKey = 'grandServices';
 const packagesKey = 'grandPackages';
 const defaultServices = [
@@ -69,7 +80,7 @@ function optimizeImage(file, options = {}) {
     reader.onload = () => { image.src = reader.result; };
     reader.onerror = () => reject(reader.error);
     image.onload = () => {
-      const maxSize = options.projectImage ? 1200 : 1400;
+      const maxSize = options.projectImage ? 900 : (options.removeBackground ? 600 : 1400);
       const scale = Math.min(1, maxSize / Math.max(image.naturalWidth, image.naturalHeight));
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
@@ -140,7 +151,7 @@ function optimizeImage(file, options = {}) {
         optimizedReader.onload = () => resolve(optimizedReader.result);
         optimizedReader.onerror = () => reject(optimizedReader.error);
         optimizedReader.readAsDataURL(blob);
-      }, outputType, options.removeBackground ? undefined : (options.projectImage ? 0.7 : 0.82));
+      }, outputType, options.removeBackground ? undefined : (options.projectImage ? 0.45 : 0.82));
     };
     image.onerror = () => reject(new Error('Invalid image file'));
     reader.readAsDataURL(file);
@@ -168,7 +179,7 @@ function renderProjectList() {
         </div>
       </div>`;
     }
-    return `<div class="project-row"><strong>${escapeHtml(project.title)}</strong><span>${escapeHtml(project.client)} · ${escapeHtml(project.category)} · ${escapeHtml(project.year)}</span><button data-manage="${index}" type="button">Manage Images</button><button data-delete="${index}" type="button">Delete</button></div>${imagesHtml}`;
+    return `<div class="project-row"><strong>${escapeHtml(project.title)}</strong><span>${escapeHtml(project.client)} · ${escapeHtml(project.category)} · ${escapeHtml(project.year)}</span><button data-edit="${index}" type="button">Edit</button><button data-manage="${index}" type="button">Manage Images</button><button data-delete="${index}" type="button">Delete</button></div>${imagesHtml}`;
   }).join('');
 }
 
@@ -345,6 +356,10 @@ imageInput.addEventListener('change', () => {
 
 document.querySelector('#projectForm').addEventListener('submit', event => {
   event.preventDefault();
+  if (editingProjectIndex < 0 && projects.length >= maxProjects) {
+    alert(`Project capacity reached (${maxProjects}). Edit or remove an existing project before adding another.`);
+    return;
+  }
   const files = [...imageInput.files].slice(0, 20);
   const images = [];
   const failedFiles = [];
@@ -370,7 +385,10 @@ document.querySelector('#projectForm').addEventListener('submit', event => {
       alert('Please select the project date before publishing.');
       return;
     }
-    projects.unshift({title, client: document.querySelector('#projectClient').value.trim(), category: document.querySelector('#projectCategory').value, date, year: date.slice(0, 4), details, images});
+    const current = editingProjectIndex >= 0 ? projects[editingProjectIndex] : null;
+    const project = {title, client: document.querySelector('#projectClient').value.trim(), category: document.querySelector('#projectCategory').value, date, year: date.slice(0, 4), details, images: images.length ? images : (current?.images || [])};
+    if (editingProjectIndex >= 0) projects[editingProjectIndex] = project;
+    else projects.unshift(project);
     const queue = JSON.parse(localStorage.getItem(postQueueKey) || '[]');
     const previousQueue = JSON.stringify(queue);
     queue.unshift({title, text: `${title} — ${details}`, platforms, createdAt: new Date().toISOString()});
@@ -378,12 +396,13 @@ document.querySelector('#projectForm').addEventListener('submit', event => {
       localStorage.setItem(postQueueKey, JSON.stringify(queue));
       if (!saveProjects(projects)) throw new Error('Project storage quota exceeded');
     } catch (error) {
-      projects.shift();
+      if (editingProjectIndex >= 0) projects[editingProjectIndex] = current;
+      else projects.shift();
       localStorage.setItem(postQueueKey, previousQueue);
       alert('Project could not be saved in this browser. Please upload fewer or smaller photos.');
       return;
     }
-    renderProjectList(); renderPostQueue(); renderOverview(); event.target.reset(); preview.innerHTML = ''; alert(failedFiles.length ? `Project published. Skipped ${failedFiles.length} unreadable image(s).` : 'Project published to the website and social publish queue.');
+    renderProjectList(); renderPostQueue(); renderOverview(); event.target.reset(); preview.innerHTML = ''; editingProjectIndex = -1; document.querySelector('#projectForm button[type="submit"]').textContent = 'Publish project to website'; alert(failedFiles.length ? `Project saved. Skipped ${failedFiles.length} unreadable image(s).` : 'Project saved to the website and social publish queue.');
   }).catch(error => {
     console.error('Could not publish project:', error);
     alert('Project could not be published. Please try again with fewer or smaller photos.');
@@ -395,8 +414,20 @@ document.querySelector('#projectList').addEventListener('click', event => {
   const deleteIdx = btn.dataset.delete;
   const manageIdx = btn.dataset.manage;
   const projectIdx = btn.dataset.projectIdx;
+  const editIdx = btn.dataset.edit;
 
-  if (deleteIdx !== undefined) {
+  if (editIdx !== undefined) {
+    const project = projects[Number(editIdx)];
+    if (!project) return;
+    editingProjectIndex = Number(editIdx);
+    document.querySelector('#projectTitle').value = project.title || '';
+    document.querySelector('#projectClient').value = project.client || '';
+    document.querySelector('#projectCategory').value = project.category || 'Event';
+    document.querySelector('#projectDate').value = project.date || `${project.year || new Date().getFullYear()}-01-01`;
+    document.querySelector('#projectDetails').value = project.details || '';
+    document.querySelector('#projectForm button[type="submit"]').textContent = 'Update project';
+    document.querySelector('#projects').scrollIntoView({behavior: 'smooth'});
+  } else if (deleteIdx !== undefined) {
     projects.splice(Number(deleteIdx), 1); saveProjects(projects); renderProjectList(); renderOverview();
   } else if (manageIdx !== undefined) {
     const imgDiv = document.querySelector(`#projectImages-${manageIdx}`);
@@ -428,6 +459,10 @@ document.querySelector('#projectList').addEventListener('click', event => {
 });
 document.querySelector('#clientForm').addEventListener('submit', event => {
   event.preventDefault();
+  if (clients.length >= maxClientLogos) {
+    alert(`Client logo capacity reached (${maxClientLogos}). Remove an old logo before adding another.`);
+    return;
+  }
   const logoInput = document.querySelector('#clientLogo');
   if (logoInput.files.length > 1) {
     logoInput.value = '';
@@ -439,7 +474,8 @@ document.querySelector('#clientForm').addEventListener('submit', event => {
   optimizeImage(file, {removeBackground: true}).catch(() => readFileAsDataUrl(file)).then(image => {
     clients.unshift({name: document.querySelector('#clientName').value.trim(), image});
     try {
-      saveClients(); renderClients(); renderOverview(); event.target.reset(); document.querySelector('#clientPreview').innerHTML = '';
+      if (!saveClients()) throw new Error('Client logo storage quota exceeded');
+      renderClients(); renderOverview(); event.target.reset(); document.querySelector('#clientPreview').innerHTML = '';
     } catch (error) {
       clients.shift();
       alert('Logo could not be saved. Please use a smaller image.');
