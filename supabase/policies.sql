@@ -1,6 +1,14 @@
 -- Run after creating a Supabase Auth admin user.
 -- The browser dashboard must sign in that user before writes are allowed.
 
+drop policy if exists "Authenticated users can upload assets" on storage.objects;
+drop policy if exists "Authenticated users can update assets" on storage.objects;
+drop policy if exists "Authenticated users can delete assets" on storage.objects;
+drop policy if exists "Public can read assets" on storage.objects;
+drop policy if exists "Authenticated users can manage clients" on public.clients;
+drop policy if exists "Authenticated users can manage projects" on public.projects;
+drop policy if exists "Authenticated users can manage leadership" on public.leadership;
+
 create policy "Authenticated users can upload assets"
 on storage.objects
 for insert
