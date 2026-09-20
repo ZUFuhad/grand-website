@@ -115,7 +115,7 @@ if (leadership) {
     portrait.classList.add('has-photo');
     portrait.style.background = `url("${ceo.image}") center/cover no-repeat`;
   }
-  data.team = (leadership.team || []).map(member => [member.name, member.name, member.role]);
+  data.team = (leadership.team || []).map(member => [member.image || '', member.name, member.role]);
 }
 const workGrid = document.querySelector('#workGrid');
 const filters = document.querySelector('#filters');
@@ -152,9 +152,10 @@ workGrid.addEventListener('click', event => {
     const images = project[5] || [];
     document.querySelector('#projectModalTitle').textContent = project[0];
     document.querySelector('#projectModalDetails').textContent = project[4] || project[1];
-    document.querySelector('#projectGallery').innerHTML = images.length ? images.map(image => `<img src="${image}" alt="${project[0]} project photo">`).join('') : '<p>No project photos uploaded yet.</p>';
+    document.querySelector('#projectGallery').innerHTML = images.length ? images.map((image, imageIndex) => `<button class="project-gallery-item" type="button" data-gallery-index="${imageIndex}" aria-label="View image ${imageIndex + 1}"><img src="${image}" alt="${project[0]} project photo ${imageIndex + 1}"></button>`).join('') : '<p>No project photos uploaded yet.</p>';
     document.querySelector('#projectModal').classList.add('open');
     document.querySelector('#projectModal').setAttribute('aria-hidden', 'false');
+    document.querySelector('#projectGallery').dataset.images = JSON.stringify(images);
     return;
   }
   const text = `${event.target.dataset.title} — ${event.target.dataset.details}`;
@@ -168,6 +169,43 @@ workGrid.addEventListener('click', event => {
 });
 
 const projectModal = document.querySelector('#projectModal');
+const imageLightbox = document.querySelector('#imageLightbox');
+const lightboxImage = document.querySelector('#lightboxImage');
+const lightboxCount = document.querySelector('#lightboxCount');
+let lightboxImages = [];
+let lightboxIndex = 0;
+const renderLightboxImage = () => {
+  if (!lightboxImages.length) return;
+  lightboxImage.src = lightboxImages[lightboxIndex];
+  lightboxCount.textContent = `${lightboxIndex + 1} / ${lightboxImages.length}`;
+};
+const closeLightbox = () => {
+  imageLightbox.classList.remove('open');
+  imageLightbox.setAttribute('aria-hidden', 'true');
+  lightboxImage.removeAttribute('src');
+  projectModal.classList.remove('gallery-lightbox-open');
+};
+document.querySelector('#projectGallery').addEventListener('click', event => {
+  const item = event.target.closest('[data-gallery-index]');
+  if (!item) return;
+  lightboxImages = JSON.parse(document.querySelector('#projectGallery').dataset.images || '[]');
+  lightboxIndex = Number(item.dataset.galleryIndex);
+  renderLightboxImage();
+  imageLightbox.classList.add('open');
+  imageLightbox.setAttribute('aria-hidden', 'false');
+  projectModal.classList.add('gallery-lightbox-open');
+});
+document.querySelector('[data-lightbox-prev]').addEventListener('click', () => {
+  lightboxIndex = (lightboxIndex - 1 + lightboxImages.length) % lightboxImages.length;
+  renderLightboxImage();
+});
+document.querySelector('[data-lightbox-next]').addEventListener('click', () => {
+  lightboxIndex = (lightboxIndex + 1) % lightboxImages.length;
+  renderLightboxImage();
+});
+imageLightbox.addEventListener('click', event => {
+  if (event.target.matches('[data-close-lightbox]')) closeLightbox();
+});
 projectModal.addEventListener('click', event => {
   if (!event.target.matches('[data-close-project]')) return;
   projectModal.classList.remove('open');
@@ -175,8 +213,17 @@ projectModal.addEventListener('click', event => {
 });
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape') {
+    closeLightbox();
     projectModal.classList.remove('open');
     projectModal.setAttribute('aria-hidden', 'true');
+  }
+  if (imageLightbox.classList.contains('open') && event.key === 'ArrowLeft') {
+    lightboxIndex = (lightboxIndex - 1 + lightboxImages.length) % lightboxImages.length;
+    renderLightboxImage();
+  }
+  if (imageLightbox.classList.contains('open') && event.key === 'ArrowRight') {
+    lightboxIndex = (lightboxIndex + 1) % lightboxImages.length;
+    renderLightboxImage();
   }
 });
 
@@ -188,7 +235,7 @@ document.querySelector('#clientHeadline').textContent = `${data.clients.length}+
 document.querySelector('#brandCount').textContent = `${data.clients.length}+`;
 document.querySelector('#projectCount').textContent = data.projects.length;
 document.querySelector('#years').textContent = new Date().getFullYear() - 2004;
-document.querySelector('#teamGrid').innerHTML = data.team.filter(member => member[1] !== 'Zahir Uddin Fuhad').map(member => `<article class="team-card"><div class="team-photo">${member[0]}</div><h3>${member[1]}</h3><p>${member[2]}</p></article>`).join('');
+document.querySelector('#teamGrid').innerHTML = data.team.filter(member => member[1] !== 'Zahir Uddin Fuhad').map(member => `<article class="team-card"><div class="team-photo"${member[0] ? ` style="background-image:url('${member[0]}');background-size:cover;background-position:center"` : ''}>${member[0] ? '' : 'TEAM'}</div><h3>${member[1]}</h3><p>${member[2]}</p></article>`).join('');
 document.querySelector('#year').textContent = new Date().getFullYear();
 
 document.querySelectorAll('[data-tilt]').forEach(element => {
@@ -208,10 +255,10 @@ document.querySelector('.menu').addEventListener('click', () => {
 });
 
 document.addEventListener('contextmenu', event => {
-  if (event.target.closest('img, .work-media, .project-gallery')) event.preventDefault();
+  if (event.target.closest('img, .work-media, .project-gallery, .image-lightbox')) event.preventDefault();
 });
 document.addEventListener('dragstart', event => {
-  if (event.target.closest('img, .work-media, .project-gallery')) event.preventDefault();
+  if (event.target.closest('img, .work-media, .project-gallery, .image-lightbox')) event.preventDefault();
 });
 document.addEventListener('keydown', event => {
   const blocked = (event.ctrlKey || event.metaKey) && ['s', 'u', 'p'].includes(event.key.toLowerCase());

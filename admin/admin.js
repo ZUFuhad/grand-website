@@ -56,9 +56,10 @@ const saveOffers = () => {
 const leadershipKey = 'grandLeadership';
 const defaultLeadership = {
   ceo: {name: 'Zahir Uddin Fuhad', role: 'CEO & Founder', message: 'We value what you have to say—and we build the work that makes it matter.', image: ''},
-  team: [{name: 'Mahin Uddin Mazumder', role: 'Chief Operating Officer'}, {name: 'GRAND Team', role: 'Creative & Communication'}, {name: 'GRAND Team', role: 'Production & Supply'}]
+  team: [{name: 'Mahin Uddin Mazumder', role: 'Chief Operating Officer', image: ''}, {name: 'GRAND Team', role: 'Creative & Communication', image: ''}, {name: 'GRAND Team', role: 'Production & Supply', image: ''}]
 };
 let leadership = JSON.parse(localStorage.getItem(leadershipKey) || 'null') || defaultLeadership;
+leadership.team = (leadership.team || []).map(member => ({...member, image: member.image || ''}));
 const saveLeadership = () => localStorage.setItem(leadershipKey, JSON.stringify(leadership));
 
 function optimizeImage(file, options = {}) {
@@ -68,7 +69,7 @@ function optimizeImage(file, options = {}) {
     reader.onload = () => { image.src = reader.result; };
     reader.onerror = () => reject(reader.error);
     image.onload = () => {
-      const maxSize = options.projectImage ? 1400 : 1600;
+      const maxSize = options.projectImage ? 1200 : 1400;
       const scale = Math.min(1, maxSize / Math.max(image.naturalWidth, image.naturalHeight));
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
@@ -90,6 +91,15 @@ function optimizeImage(file, options = {}) {
             pixels.data[index] = 0;
             pixels.data[index + 1] = 0;
             pixels.data[index + 2] = 0;
+          }
+
+          function readFileAsDataUrl(file) {
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result);
+              reader.onerror = () => reject(reader.error || new Error('Could not read image'));
+              reader.readAsDataURL(file);
+            });
           }
         }
         context.putImageData(pixels, 0, 0);
@@ -297,7 +307,7 @@ function renderLeadership() {
   document.querySelector('#ceoRole').value = leadership.ceo.role;
   document.querySelector('#ceoMessage').value = leadership.ceo.message;
   document.querySelector('#ceoPreview').innerHTML = leadership.ceo.image ? `<img src="${leadership.ceo.image}" alt="CEO preview">` : '';
-  document.querySelector('#teamList').innerHTML = leadership.team.map((member, index) => `<div class="project-row"><strong>${escapeHtml(member.name)}</strong><span>${escapeHtml(member.role)}</span><button type="button" data-team-delete="${index}">Remove</button></div>`).join('');
+  document.querySelector('#teamList').innerHTML = leadership.team.map((member, index) => `<div class="project-row"><strong>${escapeHtml(member.name)}</strong><span>${escapeHtml(member.role)}</span>${member.image ? `<img class="team-admin-thumb" src="${member.image}" alt="${escapeHtml(member.name)}">` : '<span>No picture</span>'}<button type="button" data-team-delete="${index}">Remove</button></div>`).join('');
 }
 
 function renderOffers() {
@@ -351,12 +361,16 @@ document.querySelector('#projectForm').addEventListener('submit', event => {
     const title = document.querySelector('#projectTitle').value.trim();
     const details = document.querySelector('#projectDetails').value.trim();
     if (!title || !details) {
-      projects.shift();
       alert('Please enter the project title and details before publishing.');
       return;
     }
     const platforms = [...document.querySelectorAll('input[name="social"]:checked')].map(input => input.value);
-    projects.unshift({title, client: document.querySelector('#projectClient').value.trim(), category: document.querySelector('#projectCategory').value, year: document.querySelector('#projectYear').value, details, images});
+    const date = document.querySelector('#projectDate').value;
+    if (!date) {
+      alert('Please select the project date before publishing.');
+      return;
+    }
+    projects.unshift({title, client: document.querySelector('#projectClient').value.trim(), category: document.querySelector('#projectCategory').value, date, year: date.slice(0, 4), details, images});
     const queue = JSON.parse(localStorage.getItem(postQueueKey) || '[]');
     const previousQueue = JSON.stringify(queue);
     queue.unshift({title, text: `${title} — ${details}`, platforms, createdAt: new Date().toISOString()});
@@ -369,7 +383,10 @@ document.querySelector('#projectForm').addEventListener('submit', event => {
       alert('Project could not be saved in this browser. Please upload fewer or smaller photos.');
       return;
     }
-    renderProjectList(); renderPostQueue(); renderOverview(); event.target.reset(); preview.innerHTML = ''; document.querySelector('#projectYear').value = '2025'; alert(failedFiles.length ? `Project published. Skipped ${failedFiles.length} unreadable image(s).` : 'Project published to the website and social publish queue.');
+    renderProjectList(); renderPostQueue(); renderOverview(); event.target.reset(); preview.innerHTML = ''; alert(failedFiles.length ? `Project published. Skipped ${failedFiles.length} unreadable image(s).` : 'Project published to the website and social publish queue.');
+  }).catch(error => {
+    console.error('Could not publish project:', error);
+    alert('Project could not be published. Please try again with fewer or smaller photos.');
   });
 });
 
@@ -398,6 +415,10 @@ document.querySelector('#projectList').addEventListener('click', event => {
       btn.classList.remove('is-hero');
       btn.textContent = 'Set Hero Slide';
     } else {
+      if (heroSlides.length >= 20) {
+        alert('You can select up to 20 hero slides.');
+        return;
+      }
       heroSlides.push({ image: imgData, caption: project.title });
       btn.classList.add('is-hero');
       btn.textContent = '★ Hero Slide';
@@ -415,20 +436,25 @@ document.querySelector('#clientForm').addEventListener('submit', event => {
   }
   const file = logoInput.files[0];
   if (!file) return;
-  optimizeImage(file, {removeBackground: true}).then(image => {
+  optimizeImage(file, {removeBackground: true}).catch(() => readFileAsDataUrl(file)).then(image => {
     clients.unshift({name: document.querySelector('#clientName').value.trim(), image});
-    saveClients(); renderClients(); renderOverview(); event.target.reset(); document.querySelector('#clientPreview').innerHTML = '';
-  }).catch(() => alert('Could not optimize logo image.'));
+    try {
+      saveClients(); renderClients(); renderOverview(); event.target.reset(); document.querySelector('#clientPreview').innerHTML = '';
+    } catch (error) {
+      clients.shift();
+      alert('Logo could not be saved. Please use a smaller image.');
+    }
+  }).catch(() => alert('Could not read logo image.'));
 });
 document.querySelector('#clientLogo').addEventListener('change', event => {
   const file = event.target.files[0];
   const preview = document.querySelector('#clientPreview');
   preview.innerHTML = '';
   if (!file) return;
-  optimizeImage(file, {removeBackground: true}).then(image => {
+  optimizeImage(file, {removeBackground: true}).catch(() => readFileAsDataUrl(file)).then(image => {
     preview.innerHTML = `<img src="${image}" alt="Processed logo preview">`;
   }).catch(() => {
-    preview.innerHTML = '<span>Could not process logo image.</span>';
+    preview.innerHTML = '<span>Could not read logo image.</span>';
   });
 });
 document.querySelector('#clientList').addEventListener('click', event => {
@@ -454,8 +480,31 @@ document.querySelector('#leadershipForm').addEventListener('submit', event => {
 });
 document.querySelector('#teamForm').addEventListener('submit', event => {
   event.preventDefault();
-  leadership.team.push({name: document.querySelector('#teamName').value.trim(), role: document.querySelector('#teamRole').value.trim()});
-  saveLeadership(); renderLeadership(); event.target.reset();
+  const file = document.querySelector('#teamImage').files[0];
+  const member = {name: document.querySelector('#teamName').value.trim(), role: document.querySelector('#teamRole').value.trim(), image: ''};
+  const addMember = image => {
+    member.image = image || '';
+    leadership.team.push(member);
+    saveLeadership(); renderLeadership(); event.target.reset(); document.querySelector('#teamPreview').innerHTML = '';
+  };
+  if (file) optimizeImage(file, {projectImage: true}).then(addMember).catch(() => {
+    const reader = new FileReader();
+    reader.onload = () => addMember(reader.result);
+    reader.onerror = () => alert('Could not read team member picture.');
+    reader.readAsDataURL(file);
+  });
+  else addMember('');
+});
+document.querySelector('#teamImage').addEventListener('change', event => {
+  const file = event.target.files[0];
+  const preview = document.querySelector('#teamPreview');
+  preview.innerHTML = '';
+  if (!file) return;
+  optimizeImage(file, {projectImage: true}).then(image => {
+    preview.innerHTML = `<img src="${image}" alt="Team member preview">`;
+  }).catch(() => {
+    preview.innerHTML = '<span>Picture will be saved in original format.</span>';
+  });
 });
 document.querySelector('#teamList').addEventListener('click', event => {
   const index = event.target.dataset.teamDelete;

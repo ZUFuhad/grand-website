@@ -10,6 +10,7 @@
 @media(max-width:800px){.app{grid-template-columns:1fr}.app aside{position:static;height:auto;padding:20px}.app aside a,.app aside button{display:inline-block;width:auto;margin:2px}.app aside button{margin-top:10px}.cards{grid-template-columns:1fr 1fr}.app main{padding:30px}.app h1{font-size:52px}.login-card{padding:32px}.header-actions .btn-outline{display:inline-flex}}.dash-brand,.app h1,.app h2,.cards b{font-family:'Manrope',sans-serif}.dash-brand small{font-family:'Inter',sans-serif}
 
 .project-row { grid-template-columns: 1.3fr 1fr auto auto; }
+.team-admin-thumb { width: 60px; height: 45px; object-fit: cover; border: 1px solid #d8cdbc; }
 .project-manage-images { background: #faf7f0; padding: 15px; margin-bottom: 15px; border-left: 3px solid #d8cdbc; }
 .project-images-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
 .admin-slide-thumb { position: relative; width: 120px; height: 90px; }
