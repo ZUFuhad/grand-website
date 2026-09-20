@@ -427,21 +427,36 @@ function showDashboard() {
   app.classList.remove('hidden');
   renderProjectList(); renderPostQueue(); renderClients(); renderLeadership(); renderOffers(); renderOverview();
 }
+function setLoginStatus(message) {
+  const status = document.querySelector('#loginStatus');
+  if (status) status.textContent = message;
+}
 document.querySelector('#loginBtn').onclick = async () => {
   const emailOrUsername = document.querySelector('#user').value.trim();
   const password = document.querySelector('#pass').value;
+  setLoginStatus('Signing in…');
+  document.querySelector('#loginBtn').disabled = true;
   if (emailOrUsername.includes('@')) {
-    const result = await supabase.auth.signInWithPassword({email: emailOrUsername, password});
-    if (!result.error) {
-      showDashboard();
-      return;
+    try {
+      const result = await supabase.auth.signInWithPassword({email: emailOrUsername, password});
+      if (!result.error) {
+        showDashboard();
+        return;
+      }
+      setLoginStatus(`Login failed: ${result.error.message}`);
+    } catch (error) {
+      console.error('Supabase login failed:', error);
+      setLoginStatus(`Login failed: ${error.message || 'Supabase is unavailable.'}`);
     }
-    alert(`Supabase login failed: ${result.error.message}`);
+    document.querySelector('#loginBtn').disabled = false;
     return;
   }
   if (emailOrUsername === 'Grandcms' && password === 'Grandcms2004') {
     showDashboard();
-  } else alert('Invalid login');
+  } else {
+    setLoginStatus('Invalid login. Use your Supabase email/password or the local fallback credentials.');
+    document.querySelector('#loginBtn').disabled = false;
+  }
 };
 supabase.auth.getSession().then(({data}) => {
   if (data.session) showDashboard();
