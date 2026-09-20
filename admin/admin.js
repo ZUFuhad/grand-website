@@ -1,4 +1,4 @@
-import { supabase } from '../supabase/config.js';
+import { supabase } from '../supabase/config.js?v=20260920-remote-project-save';
 
 const login = document.querySelector('#login');
 const app = document.querySelector('#app');
@@ -97,6 +97,7 @@ async function persistRemoteProject(project) {
   const result = await supabase.from('projects').upsert({id, title: project.title, client: project.client, category: project.category, project_date: project.date || (project.year ? `${project.year}-01-01` : null), details: project.details, images}, {onConflict: 'id'});
   if (result.error) throw new Error(`Project record failed: ${result.error.message}`);
   project.id = id;
+  project.images = images;
 }
 async function persistRemoteClient(client) {
   const sessionResult = await supabase.auth.getSession();
@@ -485,7 +486,7 @@ imageInput.addEventListener('change', () => {
   });
 });
 
-document.querySelector('#projectForm').addEventListener('submit', event => {
+document.querySelector('#projectForm').addEventListener('submit', async event => {
   event.preventDefault();
   if (editingProjectIndex < 0 && projects.length >= maxProjects) {
     alert(`Project capacity reached (${maxProjects}). Edit or remove an existing project before adding another.`);
@@ -521,22 +522,33 @@ document.querySelector('#projectForm').addEventListener('submit', event => {
     if (editingProjectIndex >= 0) projects[editingProjectIndex] = project;
     else projects.unshift(project);
     const queue = JSON.parse(localStorage.getItem(postQueueKey) || '[]');
-    const previousQueue = JSON.stringify(queue);
     queue.unshift({title, text: `${title} — ${details}`, platforms, createdAt: new Date().toISOString()});
+    const sessionResult = await supabase.auth.getSession();
+    const hasRemoteSession = Boolean(sessionResult.data.session);
     try {
-      localStorage.setItem(postQueueKey, JSON.stringify(queue));
-      if (!saveProjects(projects)) throw new Error('Project storage quota exceeded');
+      if (hasRemoteSession) {
+        await persistRemoteProject(project);
+        if (!saveProjects(projects)) {
+          console.warn('Project was saved remotely, but the browser cache is full.');
+        }
+      } else {
+        if (!saveProjects(projects)) throw new Error('Project storage quota exceeded');
+      }
+      try {
+        localStorage.setItem(postQueueKey, JSON.stringify(queue));
+      } catch (error) {
+        console.warn('Project publish queue could not be cached in this browser:', error);
+      }
     } catch (error) {
       if (editingProjectIndex >= 0) projects[editingProjectIndex] = current;
       else projects.shift();
-      localStorage.setItem(postQueueKey, previousQueue);
-      alert('Project could not be saved in this browser. Please upload fewer or smaller photos.');
+      console.error('Could not save project:', error);
+      alert(hasRemoteSession
+        ? `Project could not be saved to Supabase.\n\n${error.message || 'Unknown error'}`
+        : 'Project could not be saved in this browser. Please upload fewer or smaller photos.');
       return;
     }
     renderProjectList(); renderPostQueue(); renderOverview(); event.target.reset(); preview.innerHTML = ''; editingProjectIndex = -1; document.querySelector('#projectForm button[type="submit"]').textContent = 'Publish project to website';
-    persistRemoteProject(project).then(() => {
-      saveProjects(projects);
-    }).catch(error => reportRemoteError(error, 'Project'));
     alert(failedFiles.length ? `Project saved. Skipped ${failedFiles.length} unreadable image(s).` : 'Project saved to the website and social publish queue.');
   }).catch(error => {
     console.error('Could not publish project:', error);
