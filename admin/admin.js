@@ -1,4 +1,4 @@
-import { supabase } from '../supabase/config.js?v=20260920-remote-project-save';
+import { supabase } from '../supabase/config.js?v=20260920-login-syntax-fix';
 
 const login = document.querySelector('#login');
 const app = document.querySelector('#app');
@@ -500,7 +500,7 @@ document.querySelector('#projectForm').addEventListener('submit', async event =>
   }).catch(() => {
     failedFiles.push(file.name);
   })), Promise.resolve());
-  processFiles.then(() => {
+  processFiles.then(async () => {
     if (files.length && !images.length) {
       alert('Could not read the selected images. Please use JPG, PNG or WebP files.');
       return;
