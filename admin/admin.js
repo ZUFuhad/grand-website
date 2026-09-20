@@ -88,6 +88,10 @@ async function uploadDataUrl(dataUrl, folder, id, extension = 'jpg') {
   return publicUrl.data.publicUrl;
 }
 async function persistRemoteProject(project) {
+  const sessionResult = await supabase.auth.getSession();
+  if (!sessionResult.data.session) {
+    throw new Error('Supabase login required. Use your Auth email and password, not the legacy Grandcms login.');
+  }
   const id = project.id || remoteId();
   const images = await Promise.all((project.images || []).map((image, index) => uploadDataUrl(image, 'projects', `${id}/${index}`, image.startsWith('data:image/png') ? 'png' : 'jpg')));
   const result = await supabase.from('projects').upsert({id, title: project.title, client: project.client, category: project.category, project_date: project.date || (project.year ? `${project.year}-01-01` : null), details: project.details, images}, {onConflict: 'id'});
@@ -95,6 +99,10 @@ async function persistRemoteProject(project) {
   project.id = id;
 }
 async function persistRemoteClient(client) {
+  const sessionResult = await supabase.auth.getSession();
+  if (!sessionResult.data.session) {
+    throw new Error('Supabase login required. Use your Auth email and password, not the legacy Grandcms login.');
+  }
   const id = client.id || remoteId();
   const image = await uploadDataUrl(client.image, 'clients', id, client.image.startsWith('data:image/png') ? 'png' : 'jpg');
   const result = await supabase.from('clients').upsert({id, name: client.name, image_url: image}, {onConflict: 'id'});
@@ -102,6 +110,10 @@ async function persistRemoteClient(client) {
   client.id = id; client.image = image;
 }
 async function persistRemoteLeadership() {
+  const sessionResult = await supabase.auth.getSession();
+  if (!sessionResult.data.session) {
+    throw new Error('Supabase login required. Use your Auth email and password, not the legacy Grandcms login.');
+  }
   const ceoId = leadership.ceo.id || 'ceo';
   const ceoImage = await uploadDataUrl(leadership.ceo.image, 'team', ceoId, 'jpg');
   const rows = [{id: ceoId, name: leadership.ceo.name, role: leadership.ceo.role, message: leadership.ceo.message, image_url: ceoImage}];
@@ -122,7 +134,7 @@ async function deleteRemoteRecord(table, id, label) {
 }
 function reportRemoteError(error, label) {
   console.warn(`${label} was saved locally but could not sync to Supabase:`, error);
-  alert(`${label} saved locally. Supabase sync failed: ${error.message || 'unknown error'}`);
+  alert(`${label} saved locally, but Supabase sync failed.\n\n${error.message || 'Unknown error'}\n\nLog out and sign in with the Supabase Auth email/password to upload permanently.`);
 }
 async function loadRemoteAdminContent() {
   try {
