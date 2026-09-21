@@ -196,9 +196,22 @@ const renderOfferCards = (selector, items) => {
 renderOfferCards('#serviceGrid', data.services);
 renderOfferCards('#packageGrid', data.packages);
 
+const getProjectYearValue = project => {
+  const raw = project && (project.date || project.year || project[3] || project[0]);
+  const value = String(raw || '').trim();
+  if (!value) return Number.MAX_SAFE_INTEGER;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return new Date(value).getTime();
+  if (/^\d{4}$/.test(value)) return Number(value);
+  const year = Number(value.match(/\d{4}/)?.[0]);
+  return Number.isFinite(year) ? year : Number.MAX_SAFE_INTEGER;
+};
+
 function renderWorks(category = 'All') {
-  workGrid.innerHTML = data.projects
+  const visibleProjects = [...data.projects]
     .filter(project => category === 'All' || project[2] === category)
+    .sort((a, b) => getProjectYearValue(a) - getProjectYearValue(b));
+
+  workGrid.innerHTML = visibleProjects
     .map((project, index) => `<article class="work" data-project-index="${data.projects.indexOf(project)}"><div class="work-media" ${project[5] && project[5][0] ? `style="background-image:url('${project[5][0]}')"` : ''}>${!project[5] || !project[5][0] ? String(index + 1).padStart(2, '0') : ''}</div><div class="work-body"><small>${project[3]} · ${project[2]}</small><h3>${project[0]}</h3><p>${project[4] || project[1]}</p>${project[4] ? `<button class="share-project" data-title="${project[0]}" data-details="${project[4]}">Share</button>` : ''}</div></article>`)
     .join('');
 }

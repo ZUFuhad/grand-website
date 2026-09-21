@@ -140,7 +140,8 @@ async function persistRemoteLeadership() {
   if (!sessionResult.data.session) {
     throw new Error('Supabase login required. Use your Auth email and password, not the legacy Grandcms login.');
   }
-  const ceoId = leadership.ceo?.id && leadership.ceo.id !== 'ceo' ? leadership.ceo.id : remoteId();
+  const rawCeoId = leadership.ceo?.id;
+  const ceoId = rawCeoId && String(rawCeoId).trim().toLowerCase() !== 'ceo' ? rawCeoId : remoteId();
   const ceoImage = await uploadDataUrl(leadership.ceo.image, 'team', ceoId, 'jpg');
   const rows = [{id: ceoId, type: 'ceo', name: leadership.ceo.name, role: leadership.ceo.role, message: leadership.ceo.message, image_url: ceoImage}, {id: ceoId, type: 'ceo', name: leadership.ceo.name, role: leadership.ceo.role, message: leadership.ceo.message, image: ceoImage}];
   for (const member of leadership.team) {
