@@ -140,14 +140,14 @@ async function persistRemoteLeadership() {
   if (!sessionResult.data.session) {
     throw new Error('Supabase login required. Use your Auth email and password, not the legacy Grandcms login.');
   }
-  const ceoId = leadership.ceo.id || 'ceo';
+  const ceoId = leadership.ceo?.id && leadership.ceo.id !== 'ceo' ? leadership.ceo.id : remoteId();
   const ceoImage = await uploadDataUrl(leadership.ceo.image, 'team', ceoId, 'jpg');
-  const rows = [{id: ceoId, name: leadership.ceo.name, role: leadership.ceo.role, message: leadership.ceo.message, image_url: ceoImage}, {id: ceoId, name: leadership.ceo.name, role: leadership.ceo.role, message: leadership.ceo.message, image: ceoImage}];
+  const rows = [{id: ceoId, type: 'ceo', name: leadership.ceo.name, role: leadership.ceo.role, message: leadership.ceo.message, image_url: ceoImage}, {id: ceoId, type: 'ceo', name: leadership.ceo.name, role: leadership.ceo.role, message: leadership.ceo.message, image: ceoImage}];
   for (const member of leadership.team) {
-    const id = member.id || remoteId();
+    const id = member.id && member.id !== 'ceo' ? member.id : remoteId();
     const image = await uploadDataUrl(member.image, 'team', id, member.image.startsWith('data:image/png') ? 'png' : 'jpg');
     member.id = id;
-    rows.push({id, name: member.name, role: member.role, image_url: image}, {id, name: member.name, role: member.role, image});
+    rows.push({id, type: 'team', name: member.name, role: member.role, image_url: image}, {id, type: 'team', name: member.name, role: member.role, image});
   }
 
   let lastError = null;
@@ -157,7 +157,7 @@ async function persistRemoteLeadership() {
     if (!result.error) continue;
     lastError = result.error;
     const message = result.error.message || '';
-    if (!/image_url|image|column|does not exist|could not find/i.test(message)) break;
+    if (!/image_url|image|column|does not exist|could not find|type uuid|uuid/i.test(message)) break;
   }
   if (lastError) throw new Error(`Leadership records failed: ${lastError.message}`);
   leadership.ceo.id = ceoId; leadership.ceo.image = ceoImage;
@@ -191,7 +191,8 @@ async function loadRemoteAdminContent() {
       const remote = {ceo: null, team: []};
       leadershipResult.data.forEach(row => {
         const member = {id: row.id, name: row.name || '', role: row.role || '', image: row.image_url || row.image || ''};
-        if (row.type === 'ceo' || row.kind === 'ceo' || row.is_ceo || row.id === 'ceo') remote.ceo = {...member, message: row.message || ''};
+        const isLegacyCeo = typeof row.id === 'string' && row.id.toLowerCase() === 'ceo';
+        if (row.type === 'ceo' || row.kind === 'ceo' || row.is_ceo || isLegacyCeo) remote.ceo = {...member, message: row.message || ''};
         else if (member.name) remote.team.push(member);
       });
       if (remote.ceo || remote.team.length) leadership = {ceo: remote.ceo || defaultLeadership.ceo, team: remote.team};

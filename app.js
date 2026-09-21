@@ -55,7 +55,8 @@ function mapSupabaseClient(row) {
 function applySupabaseLeadership(rows) {
   const next = {ceo: null, team: []};
   rows.forEach(row => {
-    const type = row.type || row.kind || row.role_type || (row.id === 'ceo' ? 'ceo' : 'team');
+    const isLegacyCeo = typeof row.id === 'string' && row.id.toLowerCase() === 'ceo';
+    const type = row.type || row.kind || row.role_type || (isLegacyCeo ? 'ceo' : 'team');
     const member = {name: row.name || '', role: row.role || '', image: row.image_url || row.image || ''};
     if (type === 'ceo' || row.is_ceo) next.ceo = {...member, message: row.message || ''};
     else if (member.name) next.team.push(member);

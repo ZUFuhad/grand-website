@@ -32,7 +32,7 @@ create table if not exists public.projects (
 );
 
 create table if not exists public.leadership (
-  id text primary key,
+  id uuid primary key default gen_random_uuid(),
   name text,
   role text,
   message text,
@@ -53,6 +53,25 @@ alter table public.leadership add column if not exists image_url text;
 alter table public.leadership add column if not exists image text;
 alter table public.leadership add column if not exists message text;
 alter table public.leadership add column if not exists role text;
+alter table public.leadership add column if not exists type text;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'leadership'
+      AND column_name = 'id'
+      AND data_type = 'text'
+  ) THEN
+    ALTER TABLE public.leadership
+      ALTER COLUMN id TYPE uuid USING CASE
+        WHEN id = 'ceo' THEN gen_random_uuid()::text
+        ELSE id
+      END::uuid;
+  END IF;
+END $$;
 
 create policy "Authenticated users can upload assets"
 on storage.objects
