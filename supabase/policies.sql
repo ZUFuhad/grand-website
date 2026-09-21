@@ -9,6 +9,51 @@ drop policy if exists "Authenticated users can manage clients" on public.clients
 drop policy if exists "Authenticated users can manage projects" on public.projects;
 drop policy if exists "Authenticated users can manage leadership" on public.leadership;
 
+create table if not exists public.clients (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  image_url text,
+  image text,
+  logo_url text,
+  created_at timestamptz default now()
+);
+
+create table if not exists public.projects (
+  id uuid primary key default gen_random_uuid(),
+  title text,
+  client text,
+  category text,
+  project_date date,
+  details text,
+  images text[] default '{}',
+  image_urls text[] default '{}',
+  year text,
+  created_at timestamptz default now()
+);
+
+create table if not exists public.leadership (
+  id text primary key,
+  name text,
+  role text,
+  message text,
+  image_url text,
+  image text,
+  type text default 'team',
+  created_at timestamptz default now()
+);
+
+alter table public.clients add column if not exists image_url text;
+alter table public.clients add column if not exists image text;
+alter table public.clients add column if not exists logo_url text;
+alter table public.projects add column if not exists images text[] default '{}';
+alter table public.projects add column if not exists image_urls text[] default '{}';
+alter table public.projects add column if not exists project_date date;
+alter table public.projects add column if not exists details text;
+alter table public.leadership add column if not exists image_url text;
+alter table public.leadership add column if not exists image text;
+alter table public.leadership add column if not exists message text;
+alter table public.leadership add column if not exists role text;
+
 create policy "Authenticated users can upload assets"
 on storage.objects
 for insert

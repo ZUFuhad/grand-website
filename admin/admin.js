@@ -94,11 +94,22 @@ async function persistRemoteProject(project) {
   }
   const id = project.id || remoteId();
   const images = await Promise.all((project.images || []).map((image, index) => uploadDataUrl(image, 'projects', `${id}/${index}`, image.startsWith('data:image/png') ? 'png' : 'jpg')));
-  const result = await supabase.from('projects').upsert({id, title: project.title, client: project.client, category: project.category, project_date: project.date || (project.year ? `${project.year}-01-01` : null), details: project.details, images}, {onConflict: 'id'});
-  if (result.error) throw new Error(`Project record failed: ${result.error.message}`);
-  project.id = id;
-  project.images = images;
+  const projectRecord = {id, title: project.title, client: project.client, category: project.category, project_date: project.date || (project.year ? `${project.year}-01-01` : null), details: project.details, images};
+  const projectCandidates = [projectRecord, { ...projectRecord, image_urls: images }, { ...projectRecord, image_url: images[0] || null }];
+  let lastError = null;
+  for (const candidate of projectCandidates) {
+    const result = await supabase.from('projects').upsert(candidate, {onConflict: 'id'});
+    if (!result.error) {
+      project.id = id;
+      project.images = images;
+      return;
+    }
+    lastError = result.error;
+    if (!/image_url|image_urls|images|column|does not exist|could not find/i.test(result.error.message || '')) break;
+  }
+  throw new Error(`Project record failed: ${lastError?.message || 'Unknown project sync error'}`);
 }
+
 async function persistRemoteClient(client) {
   const sessionResult = await supabase.auth.getSession();
   if (!sessionResult.data.session) {
@@ -106,10 +117,24 @@ async function persistRemoteClient(client) {
   }
   const id = client.id || remoteId();
   const image = await uploadDataUrl(client.image, 'clients', id, client.image.startsWith('data:image/png') ? 'png' : 'jpg');
-  const result = await supabase.from('clients').upsert({id, name: client.name, image_url: image}, {onConflict: 'id'});
-  if (result.error) throw new Error(`Client record failed: ${result.error.message}`);
-  client.id = id; client.image = image;
+  const clientCandidates = [
+    {id, name: client.name, image_url: image},
+    {id, name: client.name, image},
+    {id, name: client.name, logo_url: image}
+  ];
+  let lastError = null;
+  for (const candidate of clientCandidates) {
+    const result = await supabase.from('clients').upsert(candidate, {onConflict: 'id'});
+    if (!result.error) {
+      client.id = id; client.image = image;
+      return;
+    }
+    lastError = result.error;
+    if (!/image_url|image|logo_url|column|does not exist|could not find/i.test(result.error.message || '')) break;
+  }
+  throw new Error(`Client record failed: ${lastError?.message || 'Unknown client sync error'}`);
 }
+
 async function persistRemoteLeadership() {
   const sessionResult = await supabase.auth.getSession();
   if (!sessionResult.data.session) {
@@ -117,15 +142,24 @@ async function persistRemoteLeadership() {
   }
   const ceoId = leadership.ceo.id || 'ceo';
   const ceoImage = await uploadDataUrl(leadership.ceo.image, 'team', ceoId, 'jpg');
-  const rows = [{id: ceoId, name: leadership.ceo.name, role: leadership.ceo.role, message: leadership.ceo.message, image_url: ceoImage}];
+  const rows = [{id: ceoId, name: leadership.ceo.name, role: leadership.ceo.role, message: leadership.ceo.message, image_url: ceoImage}, {id: ceoId, name: leadership.ceo.name, role: leadership.ceo.role, message: leadership.ceo.message, image: ceoImage}];
   for (const member of leadership.team) {
     const id = member.id || remoteId();
     const image = await uploadDataUrl(member.image, 'team', id, member.image.startsWith('data:image/png') ? 'png' : 'jpg');
     member.id = id;
-    rows.push({id, name: member.name, role: member.role, image_url: image});
+    rows.push({id, name: member.name, role: member.role, image_url: image}, {id, name: member.name, role: member.role, image});
   }
-  const result = await supabase.from('leadership').upsert(rows, {onConflict: 'id'});
-  if (result.error) throw new Error(`Leadership records failed: ${result.error.message}`);
+
+  let lastError = null;
+  for (const candidate of rows) {
+    const record = { ...candidate };
+    const result = await supabase.from('leadership').upsert(record, {onConflict: 'id'});
+    if (!result.error) continue;
+    lastError = result.error;
+    const message = result.error.message || '';
+    if (!/image_url|image|column|does not exist|could not find/i.test(message)) break;
+  }
+  if (lastError) throw new Error(`Leadership records failed: ${lastError.message}`);
   leadership.ceo.id = ceoId; leadership.ceo.image = ceoImage;
 }
 async function deleteRemoteRecord(table, id, label) {
