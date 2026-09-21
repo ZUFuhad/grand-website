@@ -187,6 +187,9 @@ if (leadership) {
 const workGrid = document.querySelector('#workGrid');
 const filters = document.querySelector('#filters');
 const categories = ['All', ...new Set(data.projects.map(project => project[2]))];
+const pageSize = 20;
+let currentCategory = 'All';
+let currentPage = 1;
 
 filters.innerHTML = categories.map((category, index) => `<button class="filter ${index === 0 ? 'active' : ''}" data-cat="${category}">${category}</button>`).join('');
 
@@ -206,14 +209,46 @@ const getProjectYearValue = project => {
   return Number.isFinite(year) ? year : Number.MAX_SAFE_INTEGER;
 };
 
-function renderWorks(category = 'All') {
+function renderPagination(totalPages) {
+  let pagination = document.querySelector('#workPagination');
+  if (!pagination) {
+    pagination = document.createElement('div');
+    pagination.id = 'workPagination';
+    pagination.className = 'work-pagination';
+    workGrid.parentNode.appendChild(pagination);
+  }
+  if (totalPages <= 1) {
+    pagination.innerHTML = '';
+    return;
+  }
+
+  const buttons = [];
+  const prevDisabled = currentPage === 1 ? 'disabled' : '';
+  const nextDisabled = currentPage === totalPages ? 'disabled' : '';
+  buttons.push(`<button type="button" data-page="prev" ${prevDisabled}>Previous</button>`);
+  buttons.push(`<span class="page-indicator">Page ${currentPage} / ${totalPages}</span>`);
+  buttons.push(`<button type="button" data-page="next" ${nextDisabled}>Next</button>`);
+  pagination.innerHTML = buttons.join('');
+}
+
+function renderWorks(category = 'All', page = 1) {
+  currentCategory = category;
+  currentPage = Math.max(1, Number(page) || 1);
+
   const visibleProjects = [...data.projects]
     .filter(project => category === 'All' || project[2] === category)
-    .sort((a, b) => getProjectYearValue(a) - getProjectYearValue(b));
+    .sort((a, b) => getProjectYearValue(b) - getProjectYearValue(a));
 
-  workGrid.innerHTML = visibleProjects
+  const totalPages = Math.max(1, Math.ceil(visibleProjects.length / pageSize));
+  currentPage = Math.min(currentPage, totalPages);
+  const startIndex = (currentPage - 1) * pageSize;
+  const pageProjects = visibleProjects.slice(startIndex, startIndex + pageSize);
+
+  workGrid.innerHTML = pageProjects
     .map((project, index) => `<article class="work" data-project-index="${data.projects.indexOf(project)}"><div class="work-media" ${project[5] && project[5][0] ? `style="background-image:url('${project[5][0]}')"` : ''}>${!project[5] || !project[5][0] ? String(index + 1).padStart(2, '0') : ''}</div><div class="work-body"><small>${project[3]} · ${project[2]}</small><h3>${project[0]}</h3><p>${project[4] || project[1]}</p>${project[4] ? `<button class="share-project" data-title="${project[0]}" data-details="${project[4]}">Share</button>` : ''}</div></article>`)
     .join('');
+
+  renderPagination(totalPages);
 }
 
 renderWorks();
@@ -221,7 +256,15 @@ filters.addEventListener('click', event => {
   if (!event.target.matches('.filter')) return;
   document.querySelectorAll('.filter').forEach(button => button.classList.remove('active'));
   event.target.classList.add('active');
-  renderWorks(event.target.dataset.cat);
+  renderWorks(event.target.dataset.cat, 1);
+});
+
+document.addEventListener('click', event => {
+  const pageButton = event.target.closest('[data-page]');
+  if (!pageButton) return;
+  const action = pageButton.dataset.page;
+  if (action === 'prev') renderWorks(currentCategory, currentPage - 1);
+  if (action === 'next') renderWorks(currentCategory, currentPage + 1);
 });
 
 workGrid.addEventListener('click', event => {
