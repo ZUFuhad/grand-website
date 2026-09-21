@@ -187,7 +187,7 @@ if (leadership) {
 const workGrid = document.querySelector('#workGrid');
 const filters = document.querySelector('#filters');
 const categories = ['All', ...new Set(data.projects.map(project => project[2]))];
-const pageSize = 20;
+const pageSize = 21;
 let currentCategory = 'All';
 let currentPage = 1;
 
