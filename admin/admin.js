@@ -68,7 +68,7 @@ const saveOffers = () => {
 };
 const leadershipKey = 'grandLeadership';
 const defaultLeadership = {
-  ceo: {name: 'Zahir Uddin Fuhad', role: 'CEO & Founder', message: 'We value what you have to say—and we build the work that makes it matter.', image: ''},
+  ceo: {name: 'Zahir Uddin Fuhad', role: 'CEO & Founder', message: 'We value what you have to say—and we build the work that makes it matter.', image: '../assets/team/ceo.jpg'},
   team: [{name: 'Mahin Uddin Mazumder', role: 'Chief Operating Officer', image: ''}, {name: 'GRAND Team', role: 'Creative & Communication', image: ''}, {name: 'GRAND Team', role: 'Production & Supply', image: ''}]
 };
 let leadership = JSON.parse(localStorage.getItem(leadershipKey) || 'null') || defaultLeadership;

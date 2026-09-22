@@ -1,6 +1,7 @@
 import { supabase } from './supabase/config.js';
 
 const data = {
+  ceoImage: 'assets/team/ceo.jpg',
   services: [
     ['Event', 'Corporate events, PR events, award ceremonies, decor, catering and event management.'],
     ['Communication', 'PR, printing, branding, media coordination and brand messaging.'],
@@ -28,7 +29,7 @@ const data = {
   ],
   clients: ['Daraz', 'Mentors', 'City Bank', 'Next Block', 'PFEC', 'WonderLand', 'Nahar Agro', 'M&M', 'Farzana Malik', 'Radisson Blu', '1st ICT Fair', 'CTG Rehab'],
   team: [
-    ['ZUF', 'Zahir Uddin Fuhad', 'CEO & Founder'],
+    ['assets/team/ceo.jpg', 'Zahir Uddin Fuhad', 'CEO & Founder'],
     ['MUM', 'Mahin Uddin Mazumder', 'Chief Operating Officer'],
     ['TEAM', 'GRAND Team', 'Creative & Communication'],
     ['TEAM', 'GRAND Team', 'Production & Supply']
@@ -89,7 +90,12 @@ async function loadSupabaseContent() {
         document.querySelector('#ceoMessageDisplay').textContent = `“${(ceo.message || '').replace(/^“|”$/g, '')}”`;
         document.querySelector('#ceoSignature').textContent = ceo.name || 'Zahir Uddin Fuhad';
         document.querySelector('#ceoSignatureRole').textContent = `${ceo.role || 'CEO & Founder'}, GRAND`;
-        if (ceo.image) document.querySelector('#ceoPortrait').style.background = `url("${ceo.image}") center/cover no-repeat`;
+        const ceoImage = ceo.image || data.ceoImage;
+        if (ceoImage) {
+          const portrait = document.querySelector('#ceoPortrait');
+          portrait.classList.add('has-photo');
+          portrait.style.background = `url("${ceoImage}") center/cover no-repeat`;
+        }
         data.team = remoteLeadership.team.map(member => [member.image || '', member.name, member.role]);
         document.querySelector('#teamGrid').innerHTML = data.team.map(member => `<article class="team-card"><div class="team-photo"${member[0] ? ` style="background-image:url('${member[0]}');background-size:cover;background-position:center"` : ''}>${member[0] ? '' : 'TEAM'}</div><h3>${member[1]}</h3><p>${member[2]}</p></article>`).join('');
       }
@@ -177,10 +183,11 @@ if (leadership) {
   document.querySelector('#ceoMessageDisplay').textContent = `“${message.replace(/^“|”$/g, '')}”`;
   document.querySelector('#ceoSignature').textContent = name;
   document.querySelector('#ceoSignatureRole').textContent = `${role}, GRAND`;
-  if (ceo.image) {
+  const ceoImage = ceo.image || data.ceoImage;
+  if (ceoImage) {
     const portrait = document.querySelector('#ceoPortrait');
     portrait.classList.add('has-photo');
-    portrait.style.background = `url("${ceo.image}") center/cover no-repeat`;
+    portrait.style.background = `url("${ceoImage}") center/cover no-repeat`;
   }
   data.team = (leadership.team || []).map(member => [member.image || '', member.name, member.role]);
 }
