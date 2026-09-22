@@ -1,4 +1,4 @@
-import { supabase } from '../supabase/config.js?v=20260920-login-syntax-fix';
+import { supabase } from '../supabase/config.js?v=20260922-leadership-uuid-fix';
 
 const login = document.querySelector('#login');
 const app = document.querySelector('#app');
@@ -76,6 +76,7 @@ leadership.team = (leadership.team || []).map(member => ({...member, image: memb
 const saveLeadership = () => localStorage.setItem(leadershipKey, JSON.stringify(leadership));
 
 const remoteId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+const isUuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 async function uploadDataUrl(dataUrl, folder, id, extension = 'jpg') {
   if (!dataUrl || !dataUrl.startsWith('data:')) return dataUrl;
   const [header, encoded] = dataUrl.split(',');
@@ -141,11 +142,11 @@ async function persistRemoteLeadership() {
     throw new Error('Supabase login required. Use your Auth email and password, not the legacy Grandcms login.');
   }
   const rawCeoId = leadership.ceo?.id;
-  const ceoId = rawCeoId && String(rawCeoId).trim().toLowerCase() !== 'ceo' ? rawCeoId : remoteId();
+  const ceoId = isUuid(rawCeoId) ? rawCeoId : remoteId();
   const ceoImage = await uploadDataUrl(leadership.ceo.image, 'team', ceoId, 'jpg');
   const rows = [{id: ceoId, type: 'ceo', name: leadership.ceo.name, role: leadership.ceo.role, message: leadership.ceo.message, image_url: ceoImage}, {id: ceoId, type: 'ceo', name: leadership.ceo.name, role: leadership.ceo.role, message: leadership.ceo.message, image: ceoImage}];
   for (const member of leadership.team) {
-    const id = member.id && member.id !== 'ceo' ? member.id : remoteId();
+    const id = isUuid(member.id) ? member.id : remoteId();
     const image = await uploadDataUrl(member.image, 'team', id, member.image.startsWith('data:image/png') ? 'png' : 'jpg');
     member.id = id;
     rows.push({id, type: 'team', name: member.name, role: member.role, image_url: image}, {id, type: 'team', name: member.name, role: member.role, image});
