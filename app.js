@@ -42,12 +42,12 @@ if (storedPackages) data.packages = storedPackages;
 const storedClients = JSON.parse(localStorage.getItem('grandClients') || 'null');
 if (storedClients) data.clients = storedClients.map(client => client.name);
 const storedProjects = JSON.parse(localStorage.getItem('grandProjects') || 'null');
-if (storedProjects) data.projects = storedProjects.map(project => [project.title, project.client, project.category, project.year, project.details, project.images || []]);
+if (storedProjects) data.projects = storedProjects.map(project => [project.title, project.client, project.category, project.year, project.details, project.images || [], project.date || '']);
 
 function mapSupabaseProject(row) {
   const images = row.images || row.image_urls || row.photos || (row.image_url ? [row.image_url] : []);
   const projectDate = row.project_date || row.date || '';
-  return [row.title || row.name || 'Untitled project', row.client || row.client_name || '', row.category || 'Event', row.year || projectDate.slice(0, 4), row.details || row.description || '', Array.isArray(images) ? images : []];
+  return [row.title || row.name || 'Untitled project', row.client || row.client_name || '', row.category || 'Event', row.year || projectDate.slice(0, 4), row.details || row.description || '', Array.isArray(images) ? images : [], projectDate];
 }
 function mapSupabaseClient(row) {
   return {name: row.name || row.title || 'Client', image: row.image_url || row.image || row.logo_url || ''};
@@ -200,13 +200,13 @@ renderOfferCards('#serviceGrid', data.services);
 renderOfferCards('#packageGrid', data.packages);
 
 const getProjectYearValue = project => {
-  const raw = project && (project.date || project.year || project[3] || project[0]);
+  const raw = project && (project.date || project[6] || project.year || project[3]);
   const value = String(raw || '').trim();
-  if (!value) return Number.MAX_SAFE_INTEGER;
+  if (!value) return null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return new Date(value).getTime();
   if (/^\d{4}$/.test(value)) return Number(value);
   const year = Number(value.match(/\d{4}/)?.[0]);
-  return Number.isFinite(year) ? year : Number.MAX_SAFE_INTEGER;
+  return Number.isFinite(year) ? year : null;
 };
 
 function renderPagination(totalPages) {
@@ -237,7 +237,14 @@ function renderWorks(category = 'All', page = 1) {
 
   const visibleProjects = [...data.projects]
     .filter(project => category === 'All' || project[2] === category)
-    .sort((a, b) => getProjectYearValue(b) - getProjectYearValue(a));
+    .sort((a, b) => {
+      const dateA = getProjectYearValue(a);
+      const dateB = getProjectYearValue(b);
+      if (dateA === null && dateB === null) return 0;
+      if (dateA === null) return 1;
+      if (dateB === null) return -1;
+      return dateA - dateB;
+    });
 
   const totalPages = Math.max(1, Math.ceil(visibleProjects.length / pageSize));
   currentPage = Math.min(currentPage, totalPages);
@@ -245,7 +252,7 @@ function renderWorks(category = 'All', page = 1) {
   const pageProjects = visibleProjects.slice(startIndex, startIndex + pageSize);
 
   workGrid.innerHTML = pageProjects
-    .map((project, index) => `<article class="work" data-project-index="${data.projects.indexOf(project)}"><div class="work-media" ${project[5] && project[5][0] ? `style="background-image:url('${project[5][0]}')"` : ''}>${!project[5] || !project[5][0] ? String(index + 1).padStart(2, '0') : ''}</div><div class="work-body"><small>${project[3]} · ${project[2]}</small><h3>${project[0]}</h3><p>${project[4] || project[1]}</p>${project[4] ? `<button class="share-project" data-title="${project[0]}" data-details="${project[4]}">Share</button>` : ''}</div></article>`)
+    .map((project, index) => `<article class="work" data-project-index="${data.projects.indexOf(project)}"><div class="work-media" ${project[5] && project[5][0] ? `style="background-image:url('${project[5][0]}')"` : ''}>${!project[5] || !project[5][0] ? String(index + 1).padStart(2, '0') : ''}</div><div class="work-body"><small>${project[6] || project[3]} · ${project[2]}</small><h3>${project[0]}</h3><p>${project[4] || project[1]}</p>${project[4] ? `<button class="share-project" data-title="${project[0]}" data-details="${project[4]}">Share</button>` : ''}</div></article>`)
     .join('');
 
   renderPagination(totalPages);
