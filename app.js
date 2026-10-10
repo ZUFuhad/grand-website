@@ -1,3 +1,13 @@
+// Auto-heal old database storage
+try {
+  const currentSavedUrl = localStorage.getItem("grand_supabase_url");
+  if (!currentSavedUrl || currentSavedUrl.includes("hqltwanywfeblxckpwgc") || currentSavedUrl.includes("dbddplawdicokffewuwz") || !currentSavedUrl.includes(".supabase.co")) {
+    localStorage.removeItem("grand_supabase_url");
+    localStorage.removeItem("grand_supabase_anon_key");
+    localStorage.removeItem("grandProjects");
+    localStorage.removeItem("grandClients");
+  }
+} catch(e) {}
 import { supabase } from './supabase/config.js';
 
 const data = {
@@ -27,7 +37,7 @@ const data = {
     ['M&M Eid Expo 2025', 'M&M', 'Marketing', '2025'],
     ['Farzana Malik — Outlet & Set', 'Farzana Malik', 'Marketing', '2025']
   ],
-  clients: ['Daraz', 'Mentors', 'City Bank', 'Next Block', 'PFEC', 'WonderLand', 'Nahar Agro', 'M&M', 'Farzana Malik', 'Radisson Blu', '1st ICT Fair', 'CTG Rehab'],
+  clients: ["Apex Footwear Ltd. (Live Verified Client)", 'Daraz', 'Mentors', 'City Bank', 'Next Block', 'PFEC', 'WonderLand', 'Nahar Agro', 'M&M', 'Farzana Malik', 'Radisson Blu', '1st ICT Fair', 'CTG Rehab'],
   team: [
     ['assets/team/ceo.jpg', 'Zahir Uddin Fuhad', 'CEO & Founder'],
     ['MUM', 'Mahin Uddin Mazumder', 'Chief Operating Officer'],
@@ -250,7 +260,7 @@ function renderWorks(category = 'All', page = 1) {
       if (dateA === null && dateB === null) return 0;
       if (dateA === null) return 1;
       if (dateB === null) return -1;
-      return dateA - dateB;
+      return dateB - dateA;
     });
 
   const totalPages = Math.max(1, Math.ceil(visibleProjects.length / pageSize));
