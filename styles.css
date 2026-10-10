@@ -19,3 +19,15 @@ h1,h2,h3{font-family:'Manrope',sans-serif;letter-spacing:-.045em;margin:0}.eyebr
 @media(max-width:900px){.site-header nav.open{display:flex;position:absolute;top:68px;left:0;right:0;padding:20px 6vw;flex-direction:column;gap:15px;background:var(--cream);border-bottom:1px solid var(--line)}}
 @media(max-width:560px){h1{font-size:64px}.service-grid,.team-grid,.work-grid{grid-template-columns:1fr}.slider-prev,.slider-next{display:none}.stats strong{font-size:32px}.contact{padding:75px 6vw}footer{flex-direction:column;gap:16px;align-items:start}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
+/* Contact & Feedback Form */
+.contact-feedback-form { margin-top: 25px; display: flex; flex-direction: column; gap: 12px; max-width: 520px; }
+.contact-feedback-form input, .contact-feedback-form textarea { width: 100%; padding: 14px 16px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: #fff; font-family: inherit; font-size: 14px; box-sizing: border-box; transition: all 0.2s; }
+.contact-feedback-form input::placeholder, .contact-feedback-form textarea::placeholder { color: rgba(255,255,255,0.65); }
+.contact-feedback-form input:focus, .contact-feedback-form textarea:focus { outline: none; border-color: #fff; background: rgba(0,0,0,0.35); box-shadow: 0 0 0 3px rgba(255,255,255,0.15); }
+.contact-feedback-form button { background: #fff; color: var(--ink); border: none; padding: 14px 24px; font-weight: 700; font-size: 14px; border-radius: 4px; cursor: pointer; transition: all 0.2s; align-self: flex-start; }
+.contact-feedback-form button:hover { background: #f1eadf; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.2); }
+.contact-feedback-form button:disabled { opacity: 0.6; cursor: not-allowed; }
+.inq-status { margin-top: 6px; font-size: 13px; font-weight: 600; min-height: 20px; }
+.inq-status.success { color: #d1fae5; }
+.inq-status.error { color: #fee2e2; }

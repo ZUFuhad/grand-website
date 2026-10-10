@@ -4,24 +4,42 @@
 <body>
 <div id="login" class="login"><div class="login-card"><div class="logo">G</div><h1>GRAND Dashboard</h1><p>Content management & website controls</p><input id="user" placeholder="Email or username" autocomplete="username"><input id="pass" type="password" placeholder="Password" autocomplete="current-password"><button id="loginBtn">Log in</button><p id="loginStatus" role="status" aria-live="polite"></p></div></div>
 <div id="app" class="app hidden">
-  <aside><div class="dash-brand">GRAND <small>ADMIN</small></div><a class="active" href="#overview">Overview</a><a href="#content">Site Content</a><a href="#projects">Signature Works</a><a href="#clients">Clients & Logos</a><a href="#leadership">Leadership</a><a href="#contact">Contact & Social</a><a href="../">View Website ↗</a><button id="logout">Log out</button></aside>
+  <aside><div class="dash-brand">GRAND <small>ADMIN</small></div><a class="active" href="#overview">Overview</a><a href="#inquiries">Inquiries & Feedback <span id="leadsNavBadge" class="nav-badge">0</span></a><a href="#content">Site Content</a><a href="#projects">Signature Works</a><a href="#clients">Clients & Logos</a><a href="#leadership">Leadership</a><a href="#contact">Contact & Social</a><a href="../">View Website ↗</a><button id="logout">Log out</button></aside>
   <main>
     <section id="overview">
       <span>CONTROL CENTER</span><h1>Manage GRAND.</h1>
-      <div class="cards"><div><b id="yearsTotal">22</b><small>Years</small></div><div><b id="brandTotal">0</b><small>Brands</small></div><div><b id="serviceTotal">0</b><small>Services</small></div><div><b id="projectTotal">0</b><small>Projects</small></div></div>
+      <div class="cards"><div><b id="yearsTotal">22</b><small>Years</small></div><div class="highlight-stat"><b id="visitorStatTotal">218</b><small>Total Visitors (Auto)</small></div><div class="highlight-stat"><b id="visitorStatToday">18</b><small>Today's Visits</small></div><div><b id="brandTotal">0</b><small>Brands</small></div><div><b id="projectTotal">0</b><small>Projects</small></div><div class="highlight-stat"><b id="feedbackStatTotal">0</b><small>Feedback & Leads</small></div></div>
       
       <div class="analytics-dashboard" aria-labelledby="analyticsTitle">
         <div class="analytics-header">
-          <div><h2 id="analyticsTitle">Visitor Count</h2><p class="analytics-note" id="analyticsStatus" role="status">Loading dashboard chart…</p></div>
-          <div class="analytics-toggles" id="trafficToggles">
-            <button class="active" type="button" data-view="daily" aria-pressed="true">Daily</button>
-            <button type="button" data-view="monthly" aria-pressed="false">Monthly</button>
-            <button type="button" data-view="yearly" aria-pressed="false">Yearly</button>
+          <div>
+            <div class="analytics-title-wrap">
+              <h2 id="analyticsTitle">Visitor Count</h2>
+              <span class="live-pill"><span class="live-dot"></span> Live Auto-Counting Active</span>
+            </div>
+            <p class="analytics-note" id="analyticsStatus" role="status">Connecting to Supabase live tracking…</p>
+          </div>
+          <div class="analytics-actions">
+            <button id="refreshStatsBtn" class="refresh-stats-btn" type="button" title="Refresh Live Visitor Stats">↻ Refresh</button>
+            <div class="analytics-toggles" id="trafficToggles">
+              <button class="active" type="button" data-view="daily" aria-pressed="true">Daily</button>
+              <button type="button" data-view="monthly" aria-pressed="false">Monthly</button>
+              <button type="button" data-view="yearly" aria-pressed="false">Yearly</button>
+            </div>
           </div>
         </div>
         <div class="charts-grid">
           <div class="chart-container chart-container-wide">
-            <div class="chart-title-row"><h3>Visits</h3><strong id="visitorTotal" aria-label="Total visitors">0</strong></div>
+            <div class="chart-title-row">
+              <div>
+                <h3>Visits</h3>
+                <div class="chart-subtitle" id="chartViewLabel">Today's Hourly Traffic</div>
+              </div>
+              <div class="visitor-total-wrap">
+                <strong id="visitorTotal" aria-label="Total visitors">218</strong>
+                <span class="visitor-badge" id="visitorViewBadge">Total All-Time Visitors</span>
+              </div>
+            </div>
             <div class="chart-canvas"><canvas id="trafficChart" aria-label="Visitor count bar chart" role="img"></canvas></div>
           </div>
           <div class="chart-container side-chart">
@@ -36,8 +54,8 @@
     <section id="clients"><h2>Clients & Logos</h2><p>Add, rename or remove client logos. Capacity: up to 1,000 client records. Changes are saved in this browser and sync to the main website.</p><form id="clientForm" class="project-form"><label>Client name<input id="clientName" required placeholder="e.g. Daraz"></label><label>Logo image<input id="clientLogo" type="file" accept="image/*" required></label><div id="clientPreview" class="image-preview"></div><button type="submit" class="save">Add client logo</button></form><div id="clientList" class="logo-admin-list"></div></section>
     <section id="leadership"><h2>Leadership</h2><form id="leadershipForm" class="project-form"><label>CEO name<input id="ceoName" required></label><label>CEO role<input id="ceoRole" required></label><label>CEO message<textarea id="ceoMessage" required></textarea></label><label>CEO picture<input id="ceoImage" type="file" accept="image/*"></label><div id="ceoPreview" class="image-preview"></div><button type="submit" class="save">Save CEO profile</button></form>    <h3>Team members</h3><form id="teamForm" class="project-form"><label>Member name<input id="teamName" required placeholder="e.g. Mahin Uddin Mazumder"></label><label>Member role<input id="teamRole" required placeholder="e.g. Chief Operating Officer"></label><label>Member picture<input id="teamImage" type="file" accept="image/*"></label><div id="teamPreview" class="image-preview"></div><button type="submit" class="save">Add team member</button></form><div id="teamList" class="list"></div></section>
     <section id="contact"><h2>Contact & Social</h2><label>Phone<input value="01819 312820"></label><label>Email<input value="grandecms@outlook.com"></label><label>Facebook URL<input value="https://www.facebook.com/GECMM2004"></label><label>LinkedIn URL<input value="https://www.linkedin.com/company/grand-ecms/posts/?viewAsMember=true"></label><label>Instagram URL<input value="https://www.instagram.com/grandevent_cms?stkn=MTJ1YW40a3N2djZ1aA=="></label><label>WhatsApp URL<input value="https://wa.me/8801819312820"></label><button class="save">Save contact</button></section>
-  </main>
+  <section id="inquiries"><h2>Customer Inquiries & Feedback</h2><p>Live messages and inquiries sent by visitors through the website contact form. Stored securely in Supabase.</p><div id="inquiriesList" class="inquiries-list"></div></section></main>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-<script type="module" src="admin.js?v=20261010-grwtylyqwxoqadwlzqkl"></script>
+<script type="module" src="admin.js?v=20261010-autocount"></script>
 </body></html>

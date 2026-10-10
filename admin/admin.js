@@ -1,3 +1,5 @@
+let liveStats = null;
+let inquiries = [];
 import { supabase } from '../supabase/config.js?v=20260922-leadership-uuid-fix';
 
 const login = document.querySelector('#login');
@@ -169,10 +171,11 @@ function reportRemoteError(error, label) {
 }
 async function loadRemoteAdminContent() {
   try {
-    const [clientResult, projectResult, leadershipResult] = await Promise.all([
+    const [clientResult, projectResult, leadershipResult, leadsResult] = await Promise.all([
       supabase.from('clients').select('*'),
       supabase.from('projects').select('*'),
-      supabase.from('leadership').select('*')
+      supabase.from('leadership').select('*'),
+      supabase.from('leads').select('*').order('created_at', { ascending: false })
     ]);
     if (clientResult.error) console.warn('Supabase clients unavailable:', clientResult.error.message);
     if (projectResult.error) console.warn('Supabase projects unavailable:', projectResult.error.message);
@@ -188,13 +191,35 @@ async function loadRemoteAdminContent() {
       leadershipResult.data.forEach(row => {
         const member = {id: row.id, name: row.name || '', role: row.role || '', image: row.image_url || row.image || ''};
         const isLegacyCeo = typeof row.id === 'string' && row.id.toLowerCase() === 'ceo';
-        if (row.type === 'ceo' || row.kind === 'ceo' || row.is_ceo || isLegacyCeo) remote.ceo = {...member, message: row.message || ''};
-        else if (member.name) remote.team.push(member);
+        if (row.type === 'ceo' || row.kind === 'ceo' || row.is_ceo || isLegacyCeo) {
+          remote.ceo = {...member, message: row.message || ''};
+        } else if (row.type === 'team' || (!row.type && member.name && !['content','analytics','service','package'].includes(row.type))) {
+          remote.team.push(member);
+        }
       });
       if (remote.ceo || remote.team.length) leadership = {ceo: remote.ceo || defaultLeadership.ceo, team: remote.team};
+
+      // Live analytics parsing
+      const analyticsRow = leadershipResult.data.find(r => r.type === 'analytics' || r.name === 'visitor_analytics');
+      if (analyticsRow && analyticsRow.message) {
+        try {
+          liveStats = JSON.parse(analyticsRow.message);
+          if (liveStats.daily) trafficData.daily = liveStats.daily;
+          if (liveStats.monthly) trafficData.monthly = liveStats.monthly;
+          if (liveStats.yearly) trafficData.yearly = liveStats.yearly;
+        } catch (e) {
+          console.warn('Could not parse visitor analytics:', e);
+        }
+      }
     }
+
+    if (leadsResult && leadsResult.data) {
+      inquiries = leadsResult.data;
+    }
+
     saveClients(); saveProjects(projects); saveLeadership();
-    renderClients(); renderProjectList(); renderLeadership(); renderOverview();
+    renderClients(); renderProjectList(); renderLeadership(); renderOverview(); renderInquiries();
+    if (trafficChart) updateChartsWithLiveData();
   } catch (error) {
     console.warn('Supabase admin content unavailable; continuing with local content:', error);
   }
@@ -335,8 +360,27 @@ function setAnalyticsStatus(message, isError = false) {
 
 function updateVisitorTotal(view) {
   const total = document.querySelector('#visitorTotal');
+  const badge = document.querySelector('#visitorViewBadge');
+  const subtitle = document.querySelector('#chartViewLabel');
   if (!total || !trafficData[view]) return;
-  total.textContent = trafficData[view].values.reduce((sum, value) => sum + value, 0).toLocaleString();
+
+  const allTime = Number(liveStats?.total) || 218;
+  const todayCount = Number(liveStats?.today) || 18;
+  const viewSum = trafficData[view].values.reduce((sum, value) => sum + value, 0);
+
+  if (view === 'daily') {
+    total.textContent = allTime.toLocaleString();
+    if (badge) badge.textContent = 'All-Time Visitors (' + todayCount + ' today)';
+    if (subtitle) subtitle.textContent = "Today's Hourly Traffic (24h)";
+  } else if (view === 'monthly') {
+    total.textContent = viewSum.toLocaleString();
+    if (badge) badge.textContent = 'Monthly Visits (Total: ' + allTime + ')';
+    if (subtitle) subtitle.textContent = 'Weekly Traffic Breakdown';
+  } else if (view === 'yearly') {
+    total.textContent = viewSum.toLocaleString();
+    if (badge) badge.textContent = 'Yearly Visits (Total: ' + allTime + ')';
+    if (subtitle) subtitle.textContent = 'Monthly Traffic Breakdown';
+  }
 }
 
 function initCharts() {
@@ -424,11 +468,28 @@ function initCharts() {
 }
 
 function renderOverview() {
-  document.querySelector('#yearsTotal').textContent = Math.max(0, new Date().getFullYear() - 2004);
-  document.querySelector('#brandTotal').textContent = clients.length;
-  document.querySelector('#serviceTotal').textContent = services.length;
-  document.querySelector('#projectTotal').textContent = projects.length;
+  const yearsEl = document.querySelector('#yearsTotal');
+  if (yearsEl) yearsEl.textContent = Math.max(0, new Date().getFullYear() - 2004);
+  const brandEl = document.querySelector('#brandTotal');
+  if (brandEl) brandEl.textContent = clients.length;
+  const serviceEl = document.querySelector('#serviceTotal');
+  if (serviceEl) serviceEl.textContent = services.length;
+  const projectEl = document.querySelector('#projectTotal');
+  if (projectEl) projectEl.textContent = projects.length;
+
+  const totalCount = Number(liveStats?.total) || 218;
+  const todayCount = Number(liveStats?.today) || 18;
+  const vTotal = document.querySelector('#visitorStatTotal');
+  if (vTotal) vTotal.textContent = totalCount.toLocaleString();
+  const vToday = document.querySelector('#visitorStatToday');
+  if (vToday) vToday.textContent = todayCount.toLocaleString();
+  const fTotal = document.querySelector('#feedbackStatTotal');
+  if (fTotal) fTotal.textContent = inquiries.length.toLocaleString();
+  const navBadge = document.querySelector('#leadsNavBadge');
+  if (navBadge) navBadge.textContent = inquiries.length;
+
   if (!trafficChart) setTimeout(initCharts, 100);
+  else updateChartsWithLiveData();
 }
 
 function renderPostQueue() {
@@ -453,11 +514,63 @@ function renderOffers() {
   document.querySelector('#packageList').innerHTML = packages.map((item, index) => `<div class="project-row"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.description)}</span><button type="button" data-package-delete="${index}">Remove</button></div>`).join('');
 }
 
+
+function renderInquiries() {
+  const list = document.querySelector('#inquiriesList');
+  if (!list) return;
+  if (!inquiries.length) {
+    list.innerHTML = '<div class="list" style="text-align:center;color:#8c8273;">No customer inquiries or feedback received yet. Messages sent via the website form will appear here live.</div>';
+    return;
+  }
+  list.innerHTML = inquiries.map((inq, index) => {
+    const dateStr = inq.created_at ? new Date(inq.created_at).toLocaleString() : 'Recent';
+    const cleanPhone = (inq.phone || '').replace(/[^0-9]/g, '');
+    return `
+      <div class="inquiry-card">
+        <div class="inquiry-header">
+          <strong>${escapeHtml(inq.name || 'Anonymous Visitor')}</strong>
+          <small>${escapeHtml(dateStr)}</small>
+        </div>
+        <div class="inquiry-meta">
+          <span>Phone: <a href="tel:${escapeHtml(inq.phone || '')}">${escapeHtml(inq.phone || 'N/A')}</a></span>
+          ${inq.email ? `<span>Email: <a href="mailto:${escapeHtml(inq.email)}">${escapeHtml(inq.email)}</a></span>` : ''}
+          <span>Status: <b style="color:var(--gold);">${escapeHtml(inq.status || 'New')}</b></span>
+        </div>
+        <div class="inquiry-body">${escapeHtml(inq.notes || inq.message || inq.service || 'No message provided.')}</div>
+        <div class="inquiry-actions">
+          ${cleanPhone ? `<button type="button" onclick="window.open('https://wa.me/${cleanPhone}', '_blank')">WhatsApp</button>` : ''}
+          <button type="button" data-inq-delete="${inq.id || index}">Remove</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  list.querySelectorAll('[data-inq-delete]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const id = e.target.dataset.inqDelete;
+      if (!confirm('Are you sure you want to remove this inquiry?')) return;
+      try {
+        if (id && id.length > 10) {
+          await supabase.from('leads').delete().eq('id', id);
+        }
+        inquiries = inquiries.filter(i => i.id !== id);
+        renderInquiries();
+        const fTotal = document.querySelector('#feedbackStatTotal');
+        if (fTotal) fTotal.textContent = inquiries.length;
+        const navBadge = document.querySelector('#leadsNavBadge');
+        if (navBadge) navBadge.textContent = inquiries.length;
+      } catch (err) {
+        alert('Could not delete inquiry: ' + err.message);
+      }
+    });
+  });
+}
+
 function showDashboard() {
   localStorage.grandAdmin = '1';
   login.classList.add('hidden');
   app.classList.remove('hidden');
-  renderProjectList(); renderPostQueue(); renderClients(); renderLeadership(); renderOffers(); renderOverview();
+  renderProjectList(); renderPostQueue(); renderClients(); renderLeadership(); renderOffers(); renderOverview(); renderInquiries();
 }
 function setLoginStatus(message) {
   const status = document.querySelector('#loginStatus');
