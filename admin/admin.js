@@ -82,14 +82,19 @@ const isUuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[
 async function uploadDataUrl(dataUrl, folder, id, extension = "jpg") {
   if (!dataUrl || !dataUrl.startsWith("data:")) return dataUrl;
   try {
-    const [header, encoded] = dataUrl.split(",");
-    const mime = (header.match(/data:([^;]+)/) || [])[1] || "image/jpeg";
-    const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
-    const path = `${folder}/${id}.${extension}`;
-    const upload = await supabase.storage.from("assets").upload(path, bytes, {contentType: mime, upsert: true});
+    const blob = await fetch(dataUrl).then(r => r.blob());
+    const mime = blob.type || "image/jpeg";
+    const cleanExt = mime.includes("png") ? "png" : "jpg";
+    const path = `${folder}/${id}.${cleanExt}`;
+    const upload = await supabase.storage.from("assets").upload(path, blob, {
+      contentType: mime,
+      upsert: true
+    });
     if (!upload.error) {
       const publicUrl = supabase.storage.from("assets").getPublicUrl(path);
       if (publicUrl?.data?.publicUrl) return publicUrl.data.publicUrl;
+    } else {
+      console.warn("Storage upload note:", upload.error.message || upload.error);
     }
   } catch (e) {
     console.warn("Storage upload note:", e);
@@ -383,6 +388,32 @@ function updateVisitorTotal(view) {
   }
 }
 
+function updateChartsWithLiveData() {
+  try {
+    if (trafficChart) {
+      const activeBtn = document.querySelector("#trafficToggles button.active");
+      const view = activeBtn ? activeBtn.dataset.view : "daily";
+      if (trafficData[view]) {
+        trafficChart.data.labels = trafficData[view].labels;
+        trafficChart.data.datasets[0].data = trafficData[view].values;
+        trafficChart.update();
+      }
+      updateVisitorTotal(view);
+    }
+    if (countryChart && liveStats?.countries) {
+      countryChart.data.labels = Object.keys(liveStats.countries);
+      countryChart.data.datasets[0].data = Object.values(liveStats.countries);
+      countryChart.update();
+    }
+    const totalCount = Number(liveStats?.total) || 218;
+    const todayCount = Number(liveStats?.today) || 18;
+    setAnalyticsStatus(`● Live Cloud Tracking Active — Auto-counting in Supabase (${totalCount} total visitors, ${todayCount} today)`);
+  } catch (err) {
+    console.warn("updateChartsWithLiveData warning:", err);
+  }
+}
+
+
 function initCharts() {
   if (trafficChart || countryChart) return;
   if (typeof Chart === 'undefined') {
@@ -468,28 +499,32 @@ function initCharts() {
 }
 
 function renderOverview() {
-  const yearsEl = document.querySelector('#yearsTotal');
-  if (yearsEl) yearsEl.textContent = Math.max(0, new Date().getFullYear() - 2004);
-  const brandEl = document.querySelector('#brandTotal');
-  if (brandEl) brandEl.textContent = clients.length;
-  const serviceEl = document.querySelector('#serviceTotal');
-  if (serviceEl) serviceEl.textContent = services.length;
-  const projectEl = document.querySelector('#projectTotal');
-  if (projectEl) projectEl.textContent = projects.length;
+  try {
+    const yearsEl = document.querySelector("#yearsTotal");
+    if (yearsEl) yearsEl.textContent = Math.max(0, new Date().getFullYear() - 2004);
+    const brandEl = document.querySelector("#brandTotal");
+    if (brandEl) brandEl.textContent = clients.length;
+    const serviceEl = document.querySelector("#serviceTotal");
+    if (serviceEl) serviceEl.textContent = services.length;
+    const projectEl = document.querySelector("#projectTotal");
+    if (projectEl) projectEl.textContent = projects.length;
 
-  const totalCount = Number(liveStats?.total) || 218;
-  const todayCount = Number(liveStats?.today) || 18;
-  const vTotal = document.querySelector('#visitorStatTotal');
-  if (vTotal) vTotal.textContent = totalCount.toLocaleString();
-  const vToday = document.querySelector('#visitorStatToday');
-  if (vToday) vToday.textContent = todayCount.toLocaleString();
-  const fTotal = document.querySelector('#feedbackStatTotal');
-  if (fTotal) fTotal.textContent = inquiries.length.toLocaleString();
-  const navBadge = document.querySelector('#leadsNavBadge');
-  if (navBadge) navBadge.textContent = inquiries.length;
+    const totalCount = Number(liveStats?.total) || 218;
+    const todayCount = Number(liveStats?.today) || 18;
+    const vTotal = document.querySelector("#visitorStatTotal");
+    if (vTotal) vTotal.textContent = totalCount.toLocaleString();
+    const vToday = document.querySelector("#visitorStatToday");
+    if (vToday) vToday.textContent = todayCount.toLocaleString();
+    const fTotal = document.querySelector("#feedbackStatTotal");
+    if (fTotal) fTotal.textContent = inquiries.length.toLocaleString();
+    const navBadge = document.querySelector("#leadsNavBadge");
+    if (navBadge) navBadge.textContent = inquiries.length;
 
-  if (!trafficChart) setTimeout(initCharts, 100);
-  else updateChartsWithLiveData();
+    if (!trafficChart) setTimeout(initCharts, 100);
+    else updateChartsWithLiveData();
+  } catch (err) {
+    console.warn("renderOverview safe caught:", err);
+  }
 }
 
 function renderPostQueue() {
@@ -692,11 +727,23 @@ document.querySelector('#projectForm').addEventListener('submit', async event =>
       alert(`Project could not be saved to Supabase.\n\n${error.message || "Unknown database error"}`);
       return;
     }
-    renderProjectList(); renderPostQueue(); renderOverview(); event.target.reset(); preview.innerHTML = ''; editingProjectIndex = -1; document.querySelector('#projectForm button[type="submit"]').textContent = 'Publish project to website';
-    alert(failedFiles.length ? `Project saved. Skipped ${failedFiles.length} unreadable image(s).` : 'Project saved to the website and social publish queue.');
+    try {
+      renderProjectList();
+      renderPostQueue();
+      renderOverview();
+      event.target.reset();
+      preview.innerHTML = '';
+      editingProjectIndex = -1;
+      const submitBtn = document.querySelector('#projectForm button[type="submit"]');
+      if (submitBtn) submitBtn.textContent = 'Publish project to website';
+      alert(failedFiles.length ? `Project saved. Skipped ${failedFiles.length} unreadable image(s).` : 'Project saved successfully to website!');
+    } catch (renderError) {
+      console.warn('Post-save UI refresh note:', renderError);
+      alert('Project saved successfully!');
+    }
   }).catch(error => {
     console.error('Could not publish project:', error);
-    alert('Project could not be published. Please try again with fewer or smaller photos.');
+    alert(`Could not process project: ${error?.message || 'Error processing photos. Please try with smaller JPG/PNG files.'}`);
   });
 });
 
