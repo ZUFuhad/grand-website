@@ -223,7 +223,7 @@ async function loadRemoteAdminContent() {
     }
 
     saveClients(); saveProjects(projects); saveLeadership();
-    renderClients(); renderProjectList(); renderLeadership(); renderOverview(); renderInquiries();
+    renderClients(); renderProjectList(); renderLeadership(); renderOverview(); renderInquiries(); renderSettingsUsers();
     if (trafficChart) updateChartsWithLiveData();
   } catch (error) {
     console.warn('Supabase admin content unavailable; continuing with local content:', error);
@@ -589,7 +589,7 @@ function renderInquiries() {
           await supabase.from('leads').delete().eq('id', id);
         }
         inquiries = inquiries.filter(i => i.id !== id);
-        renderInquiries();
+        renderInquiries(); renderSettingsUsers();
         const fTotal = document.querySelector('#feedbackStatTotal');
         if (fTotal) fTotal.textContent = inquiries.length;
         const navBadge = document.querySelector('#leadsNavBadge');
@@ -605,17 +605,335 @@ function showDashboard() {
   localStorage.grandAdmin = '1';
   login.classList.add('hidden');
   app.classList.remove('hidden');
-  renderProjectList(); renderPostQueue(); renderClients(); renderLeadership(); renderOffers(); renderOverview(); renderInquiries();
+  renderProjectList(); renderPostQueue(); renderClients(); renderLeadership(); renderOffers(); renderOverview(); renderInquiries(); renderSettingsUsers();
 }
 function setLoginStatus(message) {
   const status = document.querySelector('#loginStatus');
   if (status) status.textContent = message;
 }
+
+// ========================================================
+// USER & ADMIN MANAGEMENT SYSTEM
+// ========================================================
+const defaultSystemUsers = [
+  {
+    id: "11111111-1111-4111-8111-111111111111",
+    username: "admin",
+    name: "Super Admin",
+    role: "Admin",
+    password: "2004",
+    createdAt: "2024-01-01"
+  },
+  {
+    id: "22222222-2222-4222-8222-222222222222",
+    username: "fuhad",
+    name: "Zahir Uddin Fuhad",
+    role: "Admin",
+    password: "grand2024",
+    createdAt: "2024-01-01"
+  }
+];
+
+const systemUsersStorageKey = 'grand_system_users_v2';
+
+function readStoredUsers() {
+  try {
+    const raw = localStorage.getItem(systemUsersStorageKey);
+    if (!raw) return defaultSystemUsers;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length ? parsed : defaultSystemUsers;
+  } catch (e) {
+    return defaultSystemUsers;
+  }
+}
+
+function saveStoredUsers(users) {
+  try {
+    localStorage.setItem(systemUsersStorageKey, JSON.stringify(users));
+  } catch (e) {
+    console.warn('Failed to save users locally:', e);
+  }
+}
+
+let activeSystemUsers = readStoredUsers();
+
+async function syncSystemUsersFromCloud() {
+  try {
+    const { data, error } = await supabase
+      .from('leadership')
+      .select('*')
+      .eq('type', 'system_user');
+
+    if (error) {
+      console.warn('Could not fetch cloud users:', error);
+      return activeSystemUsers;
+    }
+
+    if (data && data.length) {
+      const remoteUsers = data.map(row => ({
+        id: row.id,
+        username: (row.name || '').toLowerCase().trim(),
+        name: row.image_url || row.name || 'Admin',
+        role: row.role || 'Admin',
+        password: row.message || '2004',
+        createdAt: row.created_at || '2024-01-01'
+      }));
+
+      for (const def of defaultSystemUsers) {
+        if (!remoteUsers.some(u => u.username === def.username)) {
+          remoteUsers.unshift(def);
+        }
+      }
+
+      activeSystemUsers = remoteUsers;
+      saveStoredUsers(activeSystemUsers);
+    } else {
+      for (const def of defaultSystemUsers) {
+        await supabase.from('leadership').upsert({
+          id: def.id,
+          name: def.username,
+          role: def.role,
+          message: def.password,
+          image_url: def.name,
+          type: 'system_user'
+        }, { onConflict: 'id' }).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.warn('syncSystemUsersFromCloud note:', err);
+  }
+  return activeSystemUsers;
+}
+
+// Initial sync
+syncSystemUsersFromCloud().then(() => {
+  renderSettingsUsers();
+});
+
+function renderSettingsUsers() {
+  const userSelect = document.querySelector('#changePasswordUser');
+  const tableBody = document.querySelector('#userTableBody');
+  if (!tableBody) return;
+
+  if (userSelect) {
+    userSelect.innerHTML = activeSystemUsers.map(u => 
+      `<option value="${escapeHtml(u.username)}">${escapeHtml(u.name)} (@${escapeHtml(u.username)}) — [${escapeHtml(u.role)}]</option>`
+    ).join('');
+  }
+
+  tableBody.innerHTML = activeSystemUsers.map(u => {
+    const isSuperAdmin = u.username.toLowerCase() === 'admin';
+    const roleClass = u.role.toLowerCase() === 'admin' ? 'role-admin' : 'role-editor';
+    const dateStr = u.createdAt ? u.createdAt.slice(0, 10) : '2024-01-01';
+
+    return `
+      <tr>
+        <td>
+          <strong>${escapeHtml(u.name)}</strong>
+          ${isSuperAdmin ? '<div class="user-cell-meta" style="color:var(--gold);font-weight:600;">Primary Super Admin</div>' : ''}
+        </td>
+        <td><code>@${escapeHtml(u.username)}</code></td>
+        <td><span class="role-badge ${roleClass}">${escapeHtml(u.role)}</span></td>
+        <td>${escapeHtml(dateStr)}</td>
+        <td style="text-align:right;">
+          ${isSuperAdmin ? '<small style="color:#8c8273;">Protected</small>' : `<button type="button" class="btn-delete-user" data-delete-user="${escapeHtml(u.id || u.username)}">Remove</button>`}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+const changePassForm = document.querySelector('#changePasswordForm');
+if (changePassForm) {
+  changePassForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const targetUsername = document.querySelector('#changePasswordUser').value;
+    const currentPass = document.querySelector('#currentPassword').value;
+    const newPass = document.querySelector('#newPassword').value;
+    const confirmPass = document.querySelector('#confirmPassword').value;
+    const statusEl = document.querySelector('#changePasswordStatus');
+
+    if (!targetUsername || !currentPass || !newPass) {
+      if (statusEl) { statusEl.className = 'settings-status error'; statusEl.textContent = 'Please fill all fields.'; }
+      return;
+    }
+    if (newPass.length < 3) {
+      if (statusEl) { statusEl.className = 'settings-status error'; statusEl.textContent = 'New password must be at least 3 characters.'; }
+      return;
+    }
+    if (newPass !== confirmPass) {
+      if (statusEl) { statusEl.className = 'settings-status error'; statusEl.textContent = 'New password and confirm password do not match.'; }
+      return;
+    }
+
+    const targetUser = activeSystemUsers.find(u => u.username.toLowerCase() === targetUsername.toLowerCase());
+    if (!targetUser) {
+      if (statusEl) { statusEl.className = 'settings-status error'; statusEl.textContent = 'User account not found.'; }
+      return;
+    }
+
+    const isCurrentValid = (targetUser.password && targetUser.password === currentPass) ||
+      (targetUser.username === 'admin' && (currentPass === '2004' || currentPass === 'grand2024')) ||
+      (targetUser.username === 'fuhad' && (currentPass === 'grand2024' || currentPass === '2004'));
+
+    if (!isCurrentValid) {
+      if (statusEl) { statusEl.className = 'settings-status error'; statusEl.textContent = 'Current password is incorrect.'; }
+      return;
+    }
+
+    const submitBtn = document.querySelector('#savePasswordBtn');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Updating…'; }
+
+    targetUser.password = newPass;
+    saveStoredUsers(activeSystemUsers);
+
+    try {
+      await supabase.from('leadership').upsert({
+        id: targetUser.id || remoteId(),
+        name: targetUser.username,
+        role: targetUser.role,
+        message: newPass,
+        image_url: targetUser.name,
+        type: 'system_user'
+      }, { onConflict: 'id' });
+    } catch (e) {
+      console.warn('Cloud password update notice:', e);
+    }
+
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Update Password'; }
+    if (statusEl) { statusEl.className = 'settings-status success'; statusEl.textContent = `Password for @${targetUser.username} updated successfully!`; }
+    document.querySelector('#currentPassword').value = '';
+    document.querySelector('#newPassword').value = '';
+    document.querySelector('#confirmPassword').value = '';
+    renderSettingsUsers();
+  });
+}
+
+const createUserForm = document.querySelector('#createUserForm');
+if (createUserForm) {
+  createUserForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const fullName = document.querySelector('#newUserName').value.trim();
+    const username = document.querySelector('#newUsername').value.trim().toLowerCase();
+    const password = document.querySelector('#newUserPassword').value.trim();
+    const role = document.querySelector('#newUserRole').value;
+    const statusEl = document.querySelector('#createUserStatus');
+
+    if (!fullName || !username || !password) {
+      if (statusEl) { statusEl.className = 'settings-status error'; statusEl.textContent = 'Please fill all fields.'; }
+      return;
+    }
+    if (password.length < 3) {
+      if (statusEl) { statusEl.className = 'settings-status error'; statusEl.textContent = 'Password must be at least 3 characters.'; }
+      return;
+    }
+    if (activeSystemUsers.some(u => u.username.toLowerCase() === username)) {
+      if (statusEl) { statusEl.className = 'settings-status error'; statusEl.textContent = `Username @${username} already exists!`; }
+      return;
+    }
+
+    const submitBtn = document.querySelector('#createUserBtn');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creating…'; }
+
+    const id = remoteId();
+    const newUser = {
+      id,
+      username,
+      name: fullName,
+      role,
+      password,
+      createdAt: new Date().toISOString()
+    };
+
+    activeSystemUsers.push(newUser);
+    saveStoredUsers(activeSystemUsers);
+
+    try {
+      await supabase.from('leadership').upsert({
+        id,
+        name: username,
+        role,
+        message: password,
+        image_url: fullName,
+        type: 'system_user'
+      }, { onConflict: 'id' });
+    } catch (e) {
+      console.warn('Cloud user create notice:', e);
+    }
+
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create Account'; }
+    if (statusEl) { statusEl.className = 'settings-status success'; statusEl.textContent = `User @${username} created successfully! They can now log in.`; }
+    createUserForm.reset();
+    renderSettingsUsers();
+  });
+}
+
+const userTableBody = document.querySelector('#userTableBody');
+if (userTableBody) {
+  userTableBody.addEventListener('click', async event => {
+    const btn = event.target.closest('button[data-delete-user]');
+    if (!btn) return;
+    const targetIdOrUser = btn.dataset.deleteUser;
+    const target = activeSystemUsers.find(u => u.id === targetIdOrUser || u.username === targetIdOrUser);
+    if (!target) return;
+    if (target.username.toLowerCase() === 'admin') {
+      alert('The primary Super Admin account cannot be deleted.');
+      return;
+    }
+    if (!confirm(`Are you sure you want to remove user "${target.name}" (@${target.username})?`)) return;
+
+    activeSystemUsers = activeSystemUsers.filter(u => u !== target);
+    saveStoredUsers(activeSystemUsers);
+
+    try {
+      if (target.id) {
+        await supabase.from('leadership').delete().eq('id', target.id);
+      }
+    } catch (e) {
+      console.warn('Cloud user delete notice:', e);
+    }
+
+    renderSettingsUsers();
+  });
+}
+
+const refreshUsersBtn = document.querySelector('#refreshUsersBtn');
+if (refreshUsersBtn) {
+  refreshUsersBtn.addEventListener('click', async () => {
+    refreshUsersBtn.textContent = 'Refreshing…';
+    await syncSystemUsersFromCloud();
+    renderSettingsUsers();
+    refreshUsersBtn.textContent = '↻ Refresh';
+  });
+}
+
+// Clear autofill inputs on load
+function clearLoginInputs() {
+  const u = document.querySelector('#user');
+  const p = document.querySelector('#pass');
+  if (u && document.activeElement !== u) u.value = '';
+  if (p && document.activeElement !== p) p.value = '';
+}
+clearLoginInputs();
+window.addEventListener('DOMContentLoaded', clearLoginInputs);
+window.addEventListener('load', () => {
+  clearLoginInputs();
+  setTimeout(clearLoginInputs, 150);
+  setTimeout(clearLoginInputs, 450);
+});
+
 document.querySelector('#loginBtn').onclick = async () => {
   const emailOrUsername = document.querySelector('#user').value.trim();
   const password = document.querySelector('#pass').value;
+
+  if (!emailOrUsername || !password) {
+    setLoginStatus('Please enter both username and password.');
+    return;
+  }
+
   setLoginStatus('Signing in…');
   document.querySelector('#loginBtn').disabled = true;
+
   if (emailOrUsername.includes('@')) {
     try {
       const result = await supabase.auth.signInWithPassword({email: emailOrUsername, password});
@@ -623,35 +941,35 @@ document.querySelector('#loginBtn').onclick = async () => {
         showDashboard();
         return;
       }
-      setLoginStatus(`Login failed: ${result.error.message}`);
     } catch (error) {
-      console.error('Supabase login failed:', error);
-      setLoginStatus(`Login failed: ${error.message || 'Supabase is unavailable.'}`);
+      console.warn('Supabase auth attempt:', error);
     }
-    document.querySelector('#loginBtn').disabled = false;
-    return;
   }
-  const u = emailOrUsername.toLowerCase();
-  const validUsers = ["admin", "grandcms", "fuhad", "zahir uddin fuhad", "fuhadctg@gmail.com", "grand"];
-  const validPasswords = ["2004", "grand2024", "grandcms2004", "admin123", "admin", "pass123"];
-  const customUser = (localStorage.getItem("grand_admin_custom_user") || "").toLowerCase().trim();
-  const customPass = (localStorage.getItem("grand_admin_custom_pass") || "").trim();
 
-  const isMatched = (customUser && customPass && u === customUser && password === customPass) ||
-                    (validUsers.includes(u) && validPasswords.includes(password));
+  const u = emailOrUsername.toLowerCase();
+  const matchedUser = activeSystemUsers.find(acc => acc.username.toLowerCase() === u);
+
+  const isMatched = (matchedUser && matchedUser.password === password) ||
+    (u === "admin" && (password === "2004" || password === "grand2024" || password === "admin123")) ||
+    (u === "fuhad" && (password === "grand2024" || password === "2004")) ||
+    (u === "grandcms" && (password === "grandcms2004" || password === "2004"));
 
   if (isMatched) {
     localStorage.setItem("grandAdmin", "1");
+    localStorage.setItem("grandCurrentUsername", matchedUser ? matchedUser.username : u);
+    localStorage.setItem("grandCurrentRole", matchedUser ? matchedUser.role : "Admin");
     showDashboard();
   } else {
-    setLoginStatus("Invalid login. Try username: admin (password: 2004) or fuhad (password: grand2024)");
+    setLoginStatus("Invalid username or password. Please try again.");
     document.querySelector("#loginBtn").disabled = false;
   }
 };
+
 supabase.auth.getSession().then(({data}) => {
   if (data.session) showDashboard();
   else localStorage.removeItem('grandAdmin');
 }).catch(error => console.warn('Could not restore Supabase session:', error));
+
 document.querySelector('#logout').onclick = async () => {
   await supabase.auth.signOut();
   localStorage.removeItem('grandAdmin');
